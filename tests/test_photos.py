@@ -1,0 +1,120 @@
+"""Tests for generator.photos — EXIF loading, GPS matching, time interpolation."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from generator.models import Route, TrackPoint
+from generator.photos import (
+    interpolate_by_time,
+    load_photos,
+    match_photos,
+    nearest_point_by_coords,
+)
+
+
+# ---------------------------------------------------------------------------
+# load_photos
+# ---------------------------------------------------------------------------
+
+
+def test_load_photos_reads_timestamp(photo_gps_path: Path) -> None:
+    photos = load_photos(photo_gps_path.parent, tz_offset="+07:00")
+    assert len(photos) == 1
+    assert photos[0].timestamp_local == datetime(2026, 4, 1, 9, 49, 12)
+
+
+def test_load_photos_utc_conversion(photo_gps_path: Path) -> None:
+    p = load_photos(photo_gps_path.parent, tz_offset="+07:00")[0]
+    assert p.timestamp_utc == datetime(2026, 4, 1, 2, 49, 12, tzinfo=timezone.utc)
+
+
+def test_load_photos_pixel_has_gps(photo_gps_path: Path) -> None:
+    p = load_photos(photo_gps_path.parent, tz_offset="+07:00")[0]
+    assert p.lat is not None
+    assert p.lon is not None
+    assert abs(p.lat - 3.5449) < 0.01
+    assert abs(p.lon - 98.1242) < 0.01
+
+
+def test_load_photos_no_gps_is_none(photo_no_gps_path: Path) -> None:
+    p = load_photos(photo_no_gps_path.parent, tz_offset="+07:00")[0]
+    assert p.lat is None
+    assert p.lon is None
+
+
+def test_load_photos_empty_dir(tmp_path: Path) -> None:
+    assert load_photos(tmp_path, tz_offset="+07:00") == []
+
+
+# ---------------------------------------------------------------------------
+# nearest_point_by_coords
+# ---------------------------------------------------------------------------
+
+
+def test_nearest_point_by_coords_finds_close(nearby_photo, single_route: Route) -> None:
+    pt = nearest_point_by_coords(nearby_photo, [single_route])
+    assert pt is not None
+    assert pt.lat == pytest.approx(nearby_photo.lat, abs=0.001)
+
+
+def test_nearest_point_by_coords_too_far(far_photo, single_route: Route) -> None:
+    assert nearest_point_by_coords(far_photo, [single_route]) is None
+
+
+# ---------------------------------------------------------------------------
+# interpolate_by_time
+# ---------------------------------------------------------------------------
+
+
+def test_interpolate_by_time_exact(single_route: Route) -> None:
+    ts = single_route.points[0].time
+    pt = interpolate_by_time(ts, [single_route])
+    assert pt is not None
+    assert pt.lat == pytest.approx(single_route.points[0].lat)
+
+
+def test_interpolate_by_time_between(single_route: Route) -> None:
+    p1, p2 = single_route.points[0], single_route.points[1]
+    midpoint_time = p1.time + (p2.time - p1.time) / 2
+    pt = interpolate_by_time(midpoint_time, [single_route])
+    assert pt is not None
+    assert pt.lat == pytest.approx((p1.lat + p2.lat) / 2, abs=1e-5)
+    assert pt.lon == pytest.approx((p1.lon + p2.lon) / 2, abs=1e-5)
+    assert pt.ele == pytest.approx((p1.ele + p2.ele) / 2, abs=0.1)
+
+
+def test_interpolate_by_time_outside(single_route: Route) -> None:
+    ts = single_route.points[0].time - timedelta(days=365)
+    assert interpolate_by_time(ts, [single_route]) is None
+
+
+# ---------------------------------------------------------------------------
+# match_photos
+# ---------------------------------------------------------------------------
+
+
+def test_match_photos_gps_tier(nearby_photo_with_gps, single_route: Route) -> None:
+    photos = match_photos([nearby_photo_with_gps], [single_route])
+    assert photos[0].match_method == "gps"
+    assert photos[0].matched_point is not None
+
+
+def test_match_photos_timestamp_tier(photo_in_window_no_gps, single_route: Route) -> None:
+    photos = match_photos([photo_in_window_no_gps], [single_route])
+    assert photos[0].match_method == "timestamp"
+    assert photos[0].matched_point is not None
+
+
+def test_match_photos_unmatched(photo_outside_window, single_route: Route) -> None:
+    photos = match_photos([photo_outside_window], [single_route])
+    assert photos[0].match_method == "unmatched"
+    assert photos[0].matched_point is None
+
+
+def test_match_photos_mutates_in_place(nearby_photo_with_gps, single_route: Route) -> None:
+    original_list = [nearby_photo_with_gps]
+    result = match_photos(original_list, [single_route])
+    assert result is original_list
