@@ -101,6 +101,15 @@ def photo_no_gps_path(tmp_path: Path) -> Path:
     )
 
 
+@pytest.fixture
+def photo_no_exif_path(tmp_path: Path) -> Path:
+    """1×1 JPEG with no EXIF data at all (e.g. WhatsApp-processed image)."""
+    out = tmp_path / "no_exif.jpg"
+    img = Image.new("RGB", (1, 1), (255, 255, 255))
+    img.save(str(out), "JPEG")
+    return out
+
+
 # ---------------------------------------------------------------------------
 # In-memory photo/route fixtures for matching tests
 # ---------------------------------------------------------------------------

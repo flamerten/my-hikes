@@ -11,6 +11,7 @@ from generator.render import (
     aggregate_stats,
     elevation_profile,
     per_route_elevation,
+    photos_to_gallery,
     photos_to_pins,
     render_hike,
     render_home,
@@ -85,6 +86,64 @@ def test_photos_to_pins_no_thumb_url_when_no_thumb_path(matched_photo) -> None:
 
 def test_photos_to_pins_empty_list() -> None:
     assert photos_to_pins([], slug="test") == []
+
+
+# ---------------------------------------------------------------------------
+# photos_to_gallery
+# ---------------------------------------------------------------------------
+
+
+def test_photos_to_gallery_includes_unmatched(unmatched_photo, tmp_path) -> None:
+    unmatched_photo.thumb_path = tmp_path / "unmatched.jpg"
+    gallery = photos_to_gallery([unmatched_photo], slug="test")
+    assert len(gallery) == 1
+
+
+def test_photos_to_gallery_includes_matched(matched_photo) -> None:
+    gallery = photos_to_gallery([matched_photo], slug="test")
+    assert len(gallery) == 1
+
+
+def test_photos_to_gallery_skips_photos_without_thumb(unmatched_photo) -> None:
+    gallery = photos_to_gallery([unmatched_photo], slug="test")
+    assert gallery == []
+
+
+def test_photos_to_gallery_thumb_url_path(matched_photo) -> None:
+    item = photos_to_gallery([matched_photo], slug="test")[0]
+    assert item["thumb_url"] == f"/thumbs/test/{matched_photo.filename}"
+
+
+def test_photos_to_gallery_includes_dimensions(matched_photo) -> None:
+    matched_photo.thumb_width = 800
+    matched_photo.thumb_height = 600
+    item = photos_to_gallery([matched_photo], slug="test")[0]
+    assert item["thumb_width"] == 800
+    assert item["thumb_height"] == 600
+
+
+def test_photos_to_gallery_includes_match_method(matched_photo) -> None:
+    item = photos_to_gallery([matched_photo], slug="test")[0]
+    assert item["match_method"] == "gps"
+
+
+def test_photos_to_gallery_unmatched_has_correct_match_method(unmatched_photo, tmp_path) -> None:
+    unmatched_photo.thumb_path = tmp_path / "unmatched.jpg"
+    item = photos_to_gallery([unmatched_photo], slug="test")[0]
+    assert item["match_method"] == "unmatched"
+
+
+def test_photos_to_gallery_is_video_flag(matched_photo) -> None:
+    item = photos_to_gallery([matched_photo], slug="test")[0]
+    assert "is_video" in item
+
+
+def test_photos_to_gallery_empty_list() -> None:
+    assert photos_to_gallery([], slug="test") == []
+
+
+def test_photos_to_gallery_is_json_serialisable(matched_photo) -> None:
+    json.dumps(photos_to_gallery([matched_photo], slug="test"))
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +250,28 @@ def test_render_hike_html_contains_route_panel(sample_hike, tmp_path: Path, temp
     render_hike(sample_hike, tmp_path, templates_dir)
     html = (tmp_path / "hikes" / sample_hike.meta.slug / "index.html").read_text()
     assert "route-panel" in html
+
+
+def test_render_hike_html_contains_gallery_var(sample_hike, tmp_path: Path, templates_dir: Path) -> None:
+    render_hike(sample_hike, tmp_path, templates_dir)
+    html = (tmp_path / "hikes" / sample_hike.meta.slug / "index.html").read_text()
+    assert "GALLERY" in html
+
+
+def test_render_hike_html_contains_gallery_grid(sample_hike, tmp_path: Path, templates_dir: Path) -> None:
+    render_hike(sample_hike, tmp_path, templates_dir)
+    html = (tmp_path / "hikes" / sample_hike.meta.slug / "index.html").read_text()
+    assert "gallery-grid" in html
+
+
+def test_render_hike_html_gallery_includes_unmatched(
+    sample_hike, unmatched_photo, tmp_path: Path, templates_dir: Path
+) -> None:
+    unmatched_photo.thumb_path = tmp_path / "unmatched.jpg"
+    sample_hike.photos.append(unmatched_photo)
+    render_hike(sample_hike, tmp_path, templates_dir)
+    html = (tmp_path / "hikes" / sample_hike.meta.slug / "index.html").read_text()
+    assert "unmatched.jpg" in html
 
 
 # ---------------------------------------------------------------------------

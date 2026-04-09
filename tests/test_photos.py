@@ -52,6 +52,30 @@ def test_load_photos_empty_dir(tmp_path: Path) -> None:
     assert load_photos(tmp_path, tz_offset="+07:00") == []
 
 
+def test_load_photos_no_exif_included(photo_no_exif_path: Path) -> None:
+    photos = load_photos(photo_no_exif_path.parent, tz_offset="+07:00")
+    assert len(photos) == 1
+
+
+def test_load_photos_no_exif_timestamp_utc_near_mtime(photo_no_exif_path: Path) -> None:
+    photos = load_photos(photo_no_exif_path.parent, tz_offset="+07:00")
+    mtime = datetime.fromtimestamp(photo_no_exif_path.stat().st_mtime, tz=timezone.utc)
+    assert abs((photos[0].timestamp_utc - mtime).total_seconds()) < 2
+
+
+def test_load_photos_no_exif_no_gps(photo_no_exif_path: Path) -> None:
+    photos = load_photos(photo_no_exif_path.parent, tz_offset="+07:00")
+    assert photos[0].lat is None
+    assert photos[0].lon is None
+
+
+def test_load_photos_no_exif_local_applies_tz(photo_no_exif_path: Path) -> None:
+    photos = load_photos(photo_no_exif_path.parent, tz_offset="+07:00")
+    mtime_utc = datetime.fromtimestamp(photo_no_exif_path.stat().st_mtime, tz=timezone.utc)
+    expected_local = (mtime_utc + timedelta(hours=7)).replace(tzinfo=None)
+    assert abs((photos[0].timestamp_local - expected_local).total_seconds()) < 2
+
+
 # ---------------------------------------------------------------------------
 # nearest_point_by_coords
 # ---------------------------------------------------------------------------

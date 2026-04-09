@@ -38,11 +38,12 @@ def load_photos(photos_dir: Path, tz_offset: str) -> list[Photo]:
             continue
 
         raw_dt = exif.get("Exif", {}).get(piexif.ExifIFD.DateTimeOriginal)
-        if not raw_dt:
-            continue
-
-        timestamp_local = datetime.strptime(raw_dt.decode(), "%Y:%m:%d %H:%M:%S")
-        timestamp_utc = (timestamp_local - tz_delta).replace(tzinfo=timezone.utc)
+        if raw_dt:
+            timestamp_local = datetime.strptime(raw_dt.decode(), "%Y:%m:%d %H:%M:%S")
+            timestamp_utc = (timestamp_local - tz_delta).replace(tzinfo=timezone.utc)
+        else:
+            timestamp_utc = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+            timestamp_local = (timestamp_utc + tz_delta).replace(tzinfo=None)
 
         lat, lon = _extract_gps(exif)
 

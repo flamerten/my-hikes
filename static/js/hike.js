@@ -166,3 +166,60 @@ function resetRoutes() {
 document.getElementById('route-panel-reset').addEventListener('click', resetRoutes);
 // clicking the map background (not a polyline) resets selection
 map.on('click', () => { if (selectedSlug) resetRoutes(); });
+
+// ---------------------------------------------------------------------------
+// Gallery grid — all photos (matched + unmatched), no map pins
+// ---------------------------------------------------------------------------
+
+const galleryItems = GALLERY.map(item => ({
+  src: item.thumb_url,
+  width: item.thumb_width ?? 800,
+  height: item.thumb_height ?? 600,
+  alt: item.filename,
+  isVideo: item.is_video,
+}));
+
+const grid = document.getElementById('gallery-grid');
+GALLERY.forEach((item, idx) => {
+  const tile = document.createElement('div');
+  tile.className = 'gallery-tile';
+  if (item.match_method === 'unmatched') tile.dataset.unmatched = 'true';
+
+  const img = document.createElement('img');
+  img.src = item.thumb_url;
+  img.alt = item.filename;
+  if (item.thumb_width && item.thumb_height) {
+    img.width = item.thumb_width;
+    img.height = item.thumb_height;
+  }
+  if (item.is_video) {
+    const badge = document.createElement('span');
+    badge.className = 'video-badge';
+    badge.textContent = '\u25B6';
+    tile.appendChild(badge);
+  }
+  tile.appendChild(img);
+  tile.addEventListener('click', () => openGalleryLightbox(idx));
+  grid.appendChild(tile);
+});
+
+function openGalleryLightbox(index) {
+  const pswp = new PhotoSwipe({ dataSource: galleryItems, index });
+
+  pswp.on('uiRegister', () => {
+    pswp.ui.registerElement({
+      name: 'filename-caption',
+      order: 9,
+      isButton: false,
+      appendTo: 'root',
+      onInit: (el) => {
+        pswp.on('change', () => {
+          const d = pswp.currSlide.data;
+          el.textContent = d.isVideo ? '\u25B6 ' + d.alt : d.alt;
+        });
+      },
+    });
+  });
+
+  pswp.init();
+}

@@ -58,6 +58,27 @@ def photos_to_pins(photos: list[Photo], slug: str) -> list[dict]:
     return pins
 
 
+def photos_to_gallery(photos: list[Photo], slug: str) -> list[dict]:
+    """Return one dict per photo that has a thumbnail, matched or not.
+
+    Unmatched photos are included so they appear in the gallery even though
+    they have no map pin.
+    """
+    result = []
+    for p in photos:
+        if not p.thumb_path:
+            continue
+        result.append({
+            "filename": p.filename,
+            "thumb_url": f"/thumbs/{slug}/{p.filename}",
+            "thumb_width": p.thumb_width,
+            "thumb_height": p.thumb_height,
+            "is_video": p.is_video,
+            "match_method": p.match_method,
+        })
+    return result
+
+
 def elevation_profile(routes: list[Route]) -> list[dict]:
     """Return [{d: cumulative_metres, ele: metres}, ...] across all routes in order."""
     profile: list[dict] = []
@@ -146,6 +167,7 @@ def render_hike(hike: Hike, out_dir: Path, templates_dir: Path) -> None:
         meta=hike.meta,
         routes_geojson=json.dumps(routes_to_geojson(hike.routes)),
         photo_pins=json.dumps(photos_to_pins(hike.photos, hike.meta.slug)),
+        photo_gallery=json.dumps(photos_to_gallery(hike.photos, hike.meta.slug)),
         elevation_profile=json.dumps(elevation_profile(hike.routes)),
         per_route_elevation=json.dumps(per_route_elevation(hike.routes)),
         stats=aggregate_stats(hike.routes),

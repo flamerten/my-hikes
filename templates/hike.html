@@ -21,6 +21,10 @@
 
 <div id="map"></div>
 <canvas id="elevation-chart"></canvas>
+<section id="gallery">
+  <h2>Photos</h2>
+  <div id="gallery-grid"></div>
+</section>
 {% endblock %}
 
 {% block head_extra %}
@@ -36,6 +40,38 @@
   opacity: 0.75;
   pointer-events: none;
 }
+#gallery { margin-top: 1.5rem; }
+#gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 6px;
+}
+.gallery-tile {
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
+  background: #111;
+  aspect-ratio: 1;
+}
+.gallery-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.15s;
+}
+.gallery-tile:hover img { opacity: 0.85; }
+.gallery-tile[data-unmatched] img { filter: saturate(0.5); }
+.gallery-tile[data-unmatched]:hover img { filter: saturate(0.7); }
+.video-badge {
+  position: absolute;
+  top: 6px;
+  left: 8px;
+  color: #fff;
+  font-size: 0.75rem;
+  text-shadow: 0 0 4px #000;
+  pointer-events: none;
+}
 </style>
 {% endblock %}
 
@@ -43,6 +79,7 @@
 <script>
   var ROUTES          = {{ routes_geojson | safe }};
   var PINS            = {{ photo_pins | safe }};
+  var GALLERY         = {{ photo_gallery | safe }};
   var ELEVATION       = {{ elevation_profile | safe }};
   var ROUTE_ELEVATION = {{ per_route_elevation | safe }};
 </script>
