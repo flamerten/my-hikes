@@ -18,7 +18,7 @@ uv run hikes new 2026-05-01-trail-name
 
 # 2. Drop files in manually:
 #    raw/2026-05-01-trail-name/routes/  ← .gpx exports from Garmin
-#    raw/2026-05-01-trail-name/photos/  ← original JPEGs (gitignored)
+#    raw/2026-05-01-trail-name/media/   ← original JPEGs and/or MP4/MOV/AVI videos (gitignored)
 #    edit raw/2026-05-01-trail-name/hike.toml  ← fill in title, description, tags, cover, tz_offset
 
 # 3. Build and preview
@@ -43,7 +43,7 @@ uv run hikes serve [--port 8000] # serve site/ over HTTP for local preview
 ```
 raw/<slug>/
   routes/*.gpx       # one GPX file per day/activity (Garmin export)
-  photos/*.jpg       # originals — gitignored
+  media/             # original JPEGs and/or MP4/MOV/AVI videos — gitignored
   hike.toml          # title, date, description, tags, cover, tz_offset
 
 generator/
@@ -92,7 +92,8 @@ RouteStats   distance_m, ele_gain_m, ele_loss_m, duration, moving_time,
 Photo        path, filename, timestamp_local, timestamp_utc,
              lat/lon (None for non-GPS cameras),
              matched_point, match_method ("gps"|"timestamp"|"unmatched"),
-             thumb_path
+             thumb_path, thumb_width, thumb_height,
+             is_video (True for frames extracted from video files)
 HikeMeta     slug, title, date, description, tags, cover, tz_offset,
              trim_start_m, trim_end_m
 Hike         meta, routes, photos
@@ -111,3 +112,5 @@ uv sync
 ```
 
 Requires Python 3.13+. Dependencies are managed with `uv` and locked in `uv.lock`.
+
+**Optional:** Install `ffmpeg` (and `ffprobe`) for video poster-frame extraction. If not on `PATH`, video files in `media/` are silently skipped during build.

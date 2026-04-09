@@ -1,6 +1,9 @@
 """EXIF extraction, thumbnail generation, and two-tier photo-to-track matching."""
 from __future__ import annotations
 
+import json
+import re
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -11,16 +14,20 @@ from generator.models import Photo, Route, TrackPoint, haversine_m
 
 MAX_SNAP_DISTANCE_M = 500
 
+_VIDEO_EXTS = re.compile(r'\.(mp4|mov|avi)$', re.IGNORECASE)
+
 
 def load_photos(photos_dir: Path, tz_offset: str) -> list[Photo]:
     """Read EXIF data from every JPEG in photos_dir and return Photo objects.
+    Also extracts a poster frame from any video files found in the same directory.
 
     Args:
-        photos_dir: Directory containing JPEG files.
+        photos_dir: Directory containing JPEG and video files.
         tz_offset: Local timezone offset string, e.g. "+07:00".
 
     Returns:
         List of Photo objects. Files with unreadable EXIF are skipped.
+        Video files without a readable creation_time are skipped.
     """
     tz_delta = _parse_tz_offset(tz_offset)
     photos = []
@@ -46,6 +53,27 @@ def load_photos(photos_dir: Path, tz_offset: str) -> list[Photo]:
             timestamp_utc=timestamp_utc,
             lat=lat,
             lon=lon,
+        ))
+
+    frame_dir = photos_dir / ".frames"
+    for path in sorted(photos_dir.glob("*")):
+        if not _VIDEO_EXTS.search(path.suffix):
+            continue
+        timestamp_utc = _get_video_timestamp(path)
+        if timestamp_utc is None:
+            continue
+        frame_path = _extract_video_frame(path, frame_dir)
+        if frame_path is None:
+            continue
+        timestamp_local = (timestamp_utc + tz_delta).replace(tzinfo=None)
+        photos.append(Photo(
+            path=frame_path,
+            filename=path.stem + ".jpg",
+            timestamp_local=timestamp_local,
+            timestamp_utc=timestamp_utc,
+            lat=None,
+            lon=None,
+            is_video=True,
         ))
 
     return photos
@@ -97,7 +125,7 @@ def nearest_point_by_coords(photo: Photo, routes: list[Route]) -> TrackPoint | N
             if dist < best_dist:
                 best_dist = dist
                 best_pt = pt
-                
+
     if best_dist <= MAX_SNAP_DISTANCE_M:
         return best_pt
     else:
@@ -206,3 +234,72 @@ def _extract_gps(exif: dict) -> tuple[float | None, float | None]:
         return None, None
 
     return _dms_to_decimal(lat_dms, lat_ref), _dms_to_decimal(lon_dms, lon_ref)
+
+
+def _extract_video_frame(video_path: Path, frame_dir: Path) -> Path | None:
+    """Extract the middle frame of a video as a JPEG using ffmpeg.
+
+    Args:
+        video_path: Path to the source video file.
+        frame_dir: Directory to write the extracted JPEG into.
+
+    Returns:
+        Path to the extracted JPEG, or None if ffmpeg is unavailable or fails.
+    """
+    out_path = frame_dir / (video_path.stem + ".jpg")
+    if out_path.exists():
+        return out_path
+
+    try:
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_format", str(video_path)],
+            capture_output=True, text=True, check=True,
+        )
+        duration = float(json.loads(probe.stdout)["format"]["duration"])
+    except Exception:
+        return None
+
+    frame_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-ss", str(duration / 2),
+                "-i", str(video_path),
+                "-frames:v", "1", "-q:v", "2",
+                str(out_path),
+            ],
+            capture_output=True, check=True,
+        )
+    except Exception:
+        return None
+
+    return out_path
+
+
+def _get_video_timestamp(video_path: Path) -> datetime | None:
+    """Read the creation_time tag from a video file's format metadata via ffprobe.
+
+    Args:
+        video_path: Path to the video file.
+
+    Returns:
+        UTC-aware datetime, or None if the tag is absent or unparseable.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe", "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+                "-show_entries", "format_tags=creation_time",
+                str(video_path),
+            ],
+            capture_output=True, text=True, check=True,
+        )
+        raw = json.loads(result.stdout)["format"]["tags"]["creation_time"]
+        # ISO 8601, e.g. "2026-04-03T11:42:33.000000Z"
+        raw = raw.rstrip("Z")
+        dt = datetime.fromisoformat(raw)
+        return dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None

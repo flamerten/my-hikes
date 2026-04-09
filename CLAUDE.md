@@ -41,7 +41,7 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 
 **Input:** `raw/<slug>/` directories, each containing:
 - `routes/*.gpx` — one GPX file per day/activity (exported from Garmin)
-- `photos/*.jpg` — originals (gitignored)
+- `media/` — original JPEGs and/or MP4/MOV/AVI videos (gitignored)
 - `hike.toml` — title, date, description, tags, cover photo, `tz_offset`
 
 **Output:** `site/` (gitignored, deployed via GitHub Actions to `gh-pages`)
@@ -55,7 +55,7 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 | `cli.py` | argparse entry point; `build`, `build-index`, `new`, `serve` commands | Done |
 | `config.py` | Parses `hike.toml` → `HikeMeta` | Done |
 | `gpx.py` | Parses GPX → `Route`/`TrackPoint`; filters GPS blips; computes `RouteStats` | Done |
-| `photos.py` | Reads EXIF, matches photos to track positions, generates thumbnails | Done |
+| `photos.py` | Reads EXIF, extracts video poster frames (ffmpeg), matches media to track positions, generates thumbnails | Done |
 | `render.py` | GeoJSON helpers + Jinja2 rendering → hike pages, meta.json sidecars, home page | Done |
 | `index.py` | Builds `site/index.json` for client-side Fuse.js search | **Phase 3** |
 
@@ -64,7 +64,7 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 ```
 TrackPoint: lat, lon, ele, time (UTC-aware datetime)
 Route: slug, name, points: list[TrackPoint], stats: RouteStats
-Photo: path, timestamp_local, timestamp_utc, lat/lon (optional), matched_point, match_method ("gps"|"timestamp"|"unmatched"), thumb_path, thumb_width, thumb_height
+Photo: path, filename, timestamp_local, timestamp_utc, lat/lon (optional), matched_point, match_method ("gps"|"timestamp"|"unmatched"), thumb_path, thumb_width, thumb_height, is_video
 HikeMeta: slug, title, date, description, tags, cover, tz_offset, trim_start_m, trim_end_m
 Hike: meta, routes: list[Route], photos: list[Photo]
 ```
@@ -74,7 +74,8 @@ Hike: meta, routes: list[Route], photos: list[Photo]
 - **Multiple routes per hike:** A hike is always `list[Route]`. Photo matching runs across the combined timeline of all routes, sorted by start time.
 - **GPS blip filtering:** `filter_blips()` removes points implying speed > 55 m/s (~200 km/h). Runs immediately after GPX parsing, before stats or photo matching.
 - **Two-tier photo matching:** Photos with GPS EXIF (Pixel) snap to nearest trackpoint by Haversine distance (max 500 m). Photos without GPS (OnePlus) interpolate position from `timestamp_utc`. Unmatched photos still appear in the gallery without a map pin.
-- **UTC normalisation:** All internal datetimes are UTC-aware. `tz_offset` is applied once in `load_photos` when converting `DateTimeOriginal` → UTC. No timezone arithmetic elsewhere.
+- **UTC normalisation:** All internal datetimes are UTC-aware. `tz_offset` is applied once in `load_photos` when converting `DateTimeOriginal` → UTC and when deriving `timestamp_local` from video `creation_time`. No timezone arithmetic elsewhere.
+- **Video poster frames:** `load_photos` also processes MP4/MOV/AVI files in `media/`. It uses `ffprobe` to read `creation_time` (UTC) and duration, then `ffmpeg` to extract the middle frame into `media/.frames/<stem>.jpg`. If `ffmpeg` is not on `PATH`, videos are silently skipped. The extracted JPEG flows through the existing thumbnail and matching pipeline unchanged; `Photo.is_video = True` marks its origin.
 - **Stats are per-route and aggregate:** Templates receive both per-route stats (day breakdown table) and a rolled-up aggregate (headline stats bar).
 
 ### Frontend stack

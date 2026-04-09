@@ -23,6 +23,22 @@
 <canvas id="elevation-chart"></canvas>
 {% endblock %}
 
+{% block head_extra %}
+<style>
+.pswp__filename-caption {
+  position: absolute;
+  bottom: 30px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 0.8rem;
+  opacity: 0.75;
+  pointer-events: none;
+}
+</style>
+{% endblock %}
+
 {% block scripts %}
 <script>
   var ROUTES          = {{ routes_geojson | safe }};

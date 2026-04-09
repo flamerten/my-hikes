@@ -50,7 +50,7 @@ PINS.forEach(pin => {
   const marker = L.circleMarker([pin.lat, pin.lon], {
     radius: 6,
     color: '#fff',
-    fillColor: '#e04',
+    fillColor: pin.is_video ? '#6a0dad' : '#e04',
     fillOpacity: 0.9,
     weight: 1.5,
   });
@@ -62,6 +62,7 @@ PINS.forEach(pin => {
       width: pin.thumb_width ?? 800,
       height: pin.thumb_height ?? 600,
       alt: pin.filename,
+      isVideo: pin.is_video,
     });
     marker.on('click', () => openLightbox(idx));
   } else {
@@ -75,6 +76,22 @@ map.addLayer(photoCluster);
 
 function openLightbox(index) {
   const pswp = new PhotoSwipe({ dataSource: pswpItems, index });
+
+  pswp.on('uiRegister', () => {
+    pswp.ui.registerElement({
+      name: 'filename-caption',
+      order: 9,
+      isButton: false,
+      appendTo: 'root',
+      onInit: (el) => {
+        pswp.on('change', () => {
+          const d = pswp.currSlide.data;
+          el.textContent = d.isVideo ? '\u25B6 ' + d.alt : d.alt;
+        });
+      },
+    });
+  });
+
   pswp.init();
 }
 

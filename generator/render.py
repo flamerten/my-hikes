@@ -53,6 +53,7 @@ def photos_to_pins(photos: list[Photo], slug: str) -> list[dict]:
             "thumb_width": p.thumb_width,
             "thumb_height": p.thumb_height,
             "match_method": p.match_method,
+            "is_video": p.is_video,
         })
     return pins
 

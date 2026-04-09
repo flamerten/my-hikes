@@ -57,6 +57,7 @@ class Photo:
     thumb_path: Path | None = None
     thumb_width: int | None = None
     thumb_height: int | None = None
+    is_video: bool = False
 
 
 @dataclass

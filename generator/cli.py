@@ -60,7 +60,7 @@ def _build(slug: str) -> None:
 
     meta = load_hike_meta(hike_dir)
     routes = load_routes(hike_dir / "routes")
-    photos = load_photos(hike_dir / "photos", tz_offset=meta.tz_offset)
+    photos = load_photos(hike_dir / "media", tz_offset=meta.tz_offset)
     match_photos(photos, routes)
 
     thumbs_dir = out_dir / "thumbs" / slug
@@ -104,13 +104,13 @@ def _new(slug: str) -> None:
         print(f"error: {hike_dir} already exists")
         return
     (hike_dir / "routes").mkdir(parents=True)
-    (hike_dir / "photos").mkdir(parents=True)
+    (hike_dir / "media").mkdir(parents=True)
     title = slug.replace("-", " ").title()
     # derive date from slug prefix if it looks like YYYY-MM-DD-...
     date = slug[:10] if len(slug) >= 10 and slug[4] == "-" and slug[7] == "-" else "YYYY-MM-DD"
     (hike_dir / "hike.toml").write_text(_TOML_TEMPLATE.format(title=title, date=date))
     print(f"scaffolded {hike_dir}/")
-    print(f"  edit {hike_dir}/hike.toml, drop GPX files into routes/, photos into photos/")
+    print(f"  edit {hike_dir}/hike.toml, drop GPX files into routes/, photos/videos into media/")
 
 
 def _serve(port: int = 8000) -> None:
