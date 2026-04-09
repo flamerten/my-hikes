@@ -63,8 +63,29 @@ def test_nearest_point_by_coords_finds_close(nearby_photo, single_route: Route) 
     assert pt.lat == pytest.approx(nearby_photo.lat, abs=0.001)
 
 
-def test_nearest_point_by_coords_too_far(far_photo, single_route: Route) -> None:
-    assert nearest_point_by_coords(far_photo, [single_route]) is None
+def test_nearest_point_by_coords_too_far_returns_photo_position(far_photo, single_route: Route) -> None:
+    """Off-track GPS photos get a synthetic pin at their own coordinates."""
+    pt = nearest_point_by_coords(far_photo, [single_route])
+    assert pt is not None
+    assert pt.lat == pytest.approx(far_photo.lat)
+    assert pt.lon == pytest.approx(far_photo.lon)
+
+
+def test_nearest_point_by_coords_too_far_time_is_utc(far_photo, single_route: Route) -> None:
+    """Synthetic TrackPoint must carry a UTC-aware timestamp."""
+    pt = nearest_point_by_coords(far_photo, [single_route])
+    assert pt is not None
+    assert pt.time.tzinfo is not None
+    assert pt.time == far_photo.timestamp_utc
+
+
+def test_match_photos_far_gps_gets_pin(far_photo, single_route: Route) -> None:
+    """A GPS photo outside the snap radius still gets a matched_point."""
+    photos = match_photos([far_photo], [single_route])
+    assert photos[0].match_method == "gps"
+    assert photos[0].matched_point is not None
+    assert photos[0].matched_point.lat == pytest.approx(far_photo.lat)
+    assert photos[0].matched_point.lon == pytest.approx(far_photo.lon)
 
 
 # ---------------------------------------------------------------------------

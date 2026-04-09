@@ -83,7 +83,9 @@ def nearest_point_by_coords(photo: Photo, routes: list[Route]) -> TrackPoint | N
         routes: All routes to search.
 
     Returns:
-        Closest TrackPoint, or None if the minimum distance exceeds MAX_SNAP_DISTANCE_M.
+        Closest TrackPoint if within MAX_SNAP_DISTANCE_M; otherwise a synthetic
+        TrackPoint at the photo's own GPS coordinates (so off-track photos still
+        get a map pin).
     """
     best_pt: TrackPoint | None = None
     best_dist = float("inf")
@@ -99,7 +101,7 @@ def nearest_point_by_coords(photo: Photo, routes: list[Route]) -> TrackPoint | N
     if best_dist <= MAX_SNAP_DISTANCE_M:
         return best_pt
     else:
-        return TrackPoint(photo.lat, photo.lon, 0, photo.timestamp_local)
+        return TrackPoint(photo.lat, photo.lon, 0, photo.timestamp_utc)
 
 
 def interpolate_by_time(
