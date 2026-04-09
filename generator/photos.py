@@ -95,8 +95,11 @@ def nearest_point_by_coords(photo: Photo, routes: list[Route]) -> TrackPoint | N
             if dist < best_dist:
                 best_dist = dist
                 best_pt = pt
-
-    return best_pt if best_dist <= MAX_SNAP_DISTANCE_M else None
+                
+    if best_dist <= MAX_SNAP_DISTANCE_M:
+        return best_pt
+    else:
+        return TrackPoint(photo.lat, photo.lon, 0, photo.timestamp_local)
 
 
 def interpolate_by_time(
