@@ -32,8 +32,12 @@ def main() -> None:
 
     build_p = sub.add_parser("build", help="Build one hike.")
     build_p.add_argument("--hike", required=True, metavar="SLUG")
+    build_p.add_argument("--base-url", default="", metavar="URL",
+                         help="URL prefix for all asset paths (e.g. /my-hikes for GitHub Pages)")
 
-    sub.add_parser("build-index", help="Build site/index.html from already-built hike sidecars.")
+    build_index_p = sub.add_parser("build-index", help="Build site/index.html from already-built hike sidecars.")
+    build_index_p.add_argument("--base-url", default="", metavar="URL",
+                               help="URL prefix for all asset paths (e.g. /my-hikes for GitHub Pages)")
 
     new_p = sub.add_parser("new", help="Scaffold a new hike directory.")
     new_p.add_argument("slug", metavar="SLUG",
@@ -45,16 +49,16 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "build":
-        _build(args.hike)
+        _build(args.hike, args.base_url)
     elif args.command == "build-index":
-        _build_index()
+        _build_index(args.base_url)
     elif args.command == "new":
         _new(args.slug)
     elif args.command == "serve":
         _serve(args.port)
 
 
-def _build(slug: str) -> None:
+def _build(slug: str, base_url: str = "") -> None:
     hike_dir = Path("raw") / slug
     out_dir = Path("site")
 
@@ -73,8 +77,8 @@ def _build(slug: str) -> None:
         shutil.copy(gpx_file, gpx_out / gpx_file.name)
 
     hike = Hike(meta=meta, routes=routes, photos=photos)
-    render_hike(hike, out_dir, Path("templates"))
-    write_meta_json(hike, out_dir)
+    render_hike(hike, out_dir, Path("templates"), base_url)
+    write_meta_json(hike, out_dir, base_url)
 
     static_src = Path("static")
     if static_src.exists():
@@ -83,7 +87,7 @@ def _build(slug: str) -> None:
     print(f"built → {out_dir}/hikes/{slug}/index.html")
 
 
-def _build_index() -> None:
+def _build_index(base_url: str = "") -> None:
     out_dir = Path("site")
     hike_metas = []
     for meta_file in sorted((out_dir / "hikes").glob("*/meta.json")):
@@ -91,7 +95,7 @@ def _build_index() -> None:
             hike_metas.append(json.load(fh))
     if not hike_metas:
         print("warning: no meta.json files found in site/hikes/ — build at least one hike first")
-    render_home(hike_metas, out_dir, Path("templates"))
+    render_home(hike_metas, out_dir, Path("templates"), base_url)
     static_src = Path("static")
     if static_src.exists():
         shutil.copytree(static_src, out_dir / "static", dirs_exist_ok=True)

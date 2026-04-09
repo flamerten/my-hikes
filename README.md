@@ -8,7 +8,7 @@ A static site generator that turns GPX tracks and photos into map-based hike pag
 |---|---|---|
 | 1 | Single hike → HTML page with map, photo pins, elevation chart, stats | **Complete** |
 | 2 | Multi-hike — homepage with hike cards, `meta.json` sidecars | **Complete** |
-| 3 | Polish & deploy — Open Graph, `index.json` search, mobile, GitHub Actions | Planned |
+| 3 | Polish & deploy — Open Graph, `index.json` search, mobile, GitHub Actions | **In progress** |
 
 ## Adding a new hike
 
@@ -21,11 +21,15 @@ uv run hikes new 2026-05-01-trail-name
 #    raw/2026-05-01-trail-name/media/   ← original JPEGs and/or MP4/MOV/AVI videos (gitignored)
 #    edit raw/2026-05-01-trail-name/hike.toml  ← fill in title, description, tags, cover, tz_offset
 
-# 3. Build and preview
+# 3. Build and preview locally
 uv run hikes build --hike 2026-05-01-trail-name
 uv run hikes build-index
 uv run hikes serve
 # open http://localhost:8000/hikes/2026-05-01-trail-name/
+
+# 4. Build for GitHub Pages (repo name is the base URL path)
+uv run hikes build --hike 2026-05-01-trail-name --base-url /my-hikes
+uv run hikes build-index --base-url /my-hikes
 ```
 
 > **Always preview over HTTP, not by opening the file directly.** OSM tile servers
@@ -34,11 +38,21 @@ uv run hikes serve
 ## Commands
 
 ```bash
-uv run hikes new <slug>          # scaffold raw/<slug>/ with hike.toml template
-uv run hikes build --hike <slug> # parse GPX + photos → site/hikes/<slug>/index.html + meta.json
-uv run hikes build-index         # rebuild site/index.html home page from all meta.json sidecars
-uv run hikes serve [--port 8000] # serve site/ over HTTP for local preview
+uv run hikes new <slug>                            # scaffold raw/<slug>/ with hike.toml template
+uv run hikes build --hike <slug>                   # parse GPX + photos → site/hikes/<slug>/index.html + meta.json
+uv run hikes build --hike <slug> --base-url <url>  # same, with asset paths prefixed (e.g. /my-hikes for GitHub Pages)
+uv run hikes build-index                           # rebuild site/index.html home page from all meta.json sidecars
+uv run hikes build-index --base-url <url>          # same, with asset paths prefixed
+uv run hikes serve [--port 8000]                   # serve site/ over HTTP for local preview
 ```
+
+## Deployment
+
+The site is deployed to GitHub Pages via `.github/workflows/deploy.yml`, which runs on every push to `main` and deploys the committed `site/` directory.
+
+**One-time setup:** In the repo settings, go to **Pages → Source** and select **GitHub Actions**.
+
+Because original media (`raw/`) is gitignored and can't be regenerated in CI, the pre-built `site/` directory is committed to the repo. Always rebuild with `--base-url /my-hikes` before committing so asset paths resolve correctly on GitHub Pages.
 
 ## Repository layout
 

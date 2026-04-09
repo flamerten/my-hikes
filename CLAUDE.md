@@ -19,11 +19,13 @@ When working on this project, read the relevant `claude_docs/` file before modif
 ## Commands
 
 ```bash
-uv run hikes build --hike SLUG  # build one hike → site/hikes/<slug>/index.html + meta.json sidecar
-uv run hikes build-index        # build site/index.html home page from all meta.json sidecars
-uv run hikes new SLUG           # scaffold raw/<slug>/ with hike.toml template
-uv run hikes serve [--port N]   # serve site/ over HTTP (default port 8000)
-uv run pytest tests/            # run all tests
+uv run hikes build --hike SLUG                   # build one hike → site/hikes/<slug>/index.html + meta.json sidecar
+uv run hikes build --hike SLUG --base-url /REPO  # same, with asset paths prefixed for GitHub Pages
+uv run hikes build-index                         # build site/index.html home page from all meta.json sidecars
+uv run hikes build-index --base-url /REPO        # same, with asset paths prefixed for GitHub Pages
+uv run hikes new SLUG                            # scaffold raw/<slug>/ with hike.toml template
+uv run hikes serve [--port N]                    # serve site/ over HTTP (default port 8000)
+uv run pytest tests/                             # run all tests
 ```
 
 Typical workflow when adding a hike:
@@ -31,6 +33,13 @@ Typical workflow when adding a hike:
 uv run hikes build --hike <slug>   # builds hike page and writes meta.json
 uv run hikes build-index           # rebuilds home page to include the new hike
 uv run hikes serve                 # preview at http://localhost:8000/
+```
+
+Workflow when building for GitHub Pages deployment (repo is `my-hikes`):
+```bash
+uv run hikes build --hike <slug> --base-url /my-hikes
+uv run hikes build-index --base-url /my-hikes
+# commit site/ and push — GitHub Actions deploys automatically
 ```
 
 Always use `uv run python` — never bare `python` or `python3`.
@@ -44,7 +53,7 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 - `media/` — original JPEGs and/or MP4/MOV/AVI videos (gitignored)
 - `hike.toml` — title, date, description, tags, cover photo, `tz_offset`
 
-**Output:** `site/` (gitignored, deployed via GitHub Actions to `gh-pages`)
+**Output:** `site/` (committed to `main`, deployed via GitHub Actions to GitHub Pages)
 
 **Photo storage:** Only compressed thumbnails are stored. Thumbnails are generated during the build and deployed to GitHub Pages alongside the HTML. Original photos are gitignored and never uploaded anywhere.
 

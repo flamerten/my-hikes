@@ -41,7 +41,7 @@
 <h1 class="site-title">MyHikes</h1>
 <div class="hike-grid">
   {% for hike in hikes %}
-  <a class="hike-card" href="/hikes/{{ hike.slug }}/index.html">
+  <a class="hike-card" href="{{ base_url }}/hikes/{{ hike.slug }}/index.html">
     {% if hike.cover_thumb_url %}
     <img class="hike-card-cover" src="{{ hike.cover_thumb_url }}" alt="{{ hike.title }} cover photo" loading="lazy">
     {% else %}
