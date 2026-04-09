@@ -10,6 +10,7 @@ from generator.models import Route
 from generator.render import (
     aggregate_stats,
     elevation_profile,
+    per_route_elevation,
     photos_to_pins,
     render_hike,
     routes_to_geojson,
@@ -176,3 +177,95 @@ def test_render_hike_html_is_valid_utf8(sample_hike, tmp_path: Path, templates_d
     render_hike(sample_hike, tmp_path, templates_dir)
     path = tmp_path / "hikes" / sample_hike.meta.slug / "index.html"
     path.read_text(encoding="utf-8")
+
+
+def test_render_hike_html_contains_route_elevation(sample_hike, tmp_path: Path, templates_dir: Path) -> None:
+    render_hike(sample_hike, tmp_path, templates_dir)
+    html = (tmp_path / "hikes" / sample_hike.meta.slug / "index.html").read_text()
+    assert "ROUTE_ELEVATION" in html
+
+
+def test_render_hike_html_contains_route_panel(sample_hike, tmp_path: Path, templates_dir: Path) -> None:
+    render_hike(sample_hike, tmp_path, templates_dir)
+    html = (tmp_path / "hikes" / sample_hike.meta.slug / "index.html").read_text()
+    assert "route-panel" in html
+
+
+# ---------------------------------------------------------------------------
+# routes_to_geojson — stats in properties
+# ---------------------------------------------------------------------------
+
+
+def test_routes_to_geojson_stats_in_properties(single_route: Route) -> None:
+    props = routes_to_geojson([single_route])["features"][0]["properties"]
+    assert "distance_m" in props
+    assert "ele_gain_m" in props
+    assert "ele_loss_m" in props
+    assert "max_ele_m" in props
+    assert "avg_pace_min_km" in props
+
+
+def test_routes_to_geojson_distance_matches_route_stats(single_route: Route) -> None:
+    props = routes_to_geojson([single_route])["features"][0]["properties"]
+    assert props["distance_m"] == pytest.approx(single_route.stats.distance_m, abs=0.1)
+
+
+# ---------------------------------------------------------------------------
+# photos_to_pins — dimensions
+# ---------------------------------------------------------------------------
+
+
+def test_photos_to_pins_includes_thumb_dimensions(matched_photo) -> None:
+    matched_photo.thumb_width = 800
+    matched_photo.thumb_height = 600
+    pin = photos_to_pins([matched_photo], slug="test")[0]
+    assert pin["thumb_width"] == 800
+    assert pin["thumb_height"] == 600
+
+
+def test_photos_to_pins_dimensions_none_when_not_set(matched_photo) -> None:
+    pin = photos_to_pins([matched_photo], slug="test")[0]
+    assert pin["thumb_width"] is None
+    assert pin["thumb_height"] is None
+
+
+# ---------------------------------------------------------------------------
+# per_route_elevation
+# ---------------------------------------------------------------------------
+
+
+def test_per_route_elevation_keyed_by_slug(single_route: Route) -> None:
+    result = per_route_elevation([single_route])
+    assert single_route.slug in result
+
+
+def test_per_route_elevation_starts_at_zero(single_route: Route) -> None:
+    profile = per_route_elevation([single_route])[single_route.slug]
+    assert profile[0]["d"] == 0.0
+
+
+def test_per_route_elevation_distances_ascending(single_route: Route) -> None:
+    profile = per_route_elevation([single_route])[single_route.slug]
+    ds = [p["d"] for p in profile]
+    assert ds == sorted(ds)
+
+
+def test_per_route_elevation_point_count(single_route: Route) -> None:
+    profile = per_route_elevation([single_route])[single_route.slug]
+    assert len(profile) == len(single_route.points)
+
+
+def test_per_route_elevation_resets_per_route(two_routes) -> None:
+    result = per_route_elevation(two_routes)
+    for route in two_routes:
+        assert result[route.slug][0]["d"] == 0.0
+
+
+def test_per_route_elevation_ele_matches_trackpoints(single_route: Route) -> None:
+    profile = per_route_elevation([single_route])[single_route.slug]
+    for entry, pt in zip(profile, single_route.points):
+        assert entry["ele"] == pytest.approx(pt.ele, abs=0.1)
+
+
+def test_per_route_elevation_is_json_serialisable(single_route: Route) -> None:
+    json.dumps(per_route_elevation([single_route]))

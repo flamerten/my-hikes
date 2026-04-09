@@ -162,3 +162,31 @@ def test_generate_thumbnail_returns_path_in_out_dir(photo_gps_path: Path, tmp_pa
     out_dir = tmp_path / "thumbs"
     thumb = generate_thumbnail(photo, out_dir)
     assert thumb.parent == out_dir
+
+
+def test_generate_thumbnail_sets_dimensions(large_photo_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(large_photo_path.parent, tz_offset="+07:00")[0]
+    generate_thumbnail(photo, tmp_path / "thumbs", max_px=100)
+    assert photo.thumb_width is not None
+    assert photo.thumb_height is not None
+    assert max(photo.thumb_width, photo.thumb_height) <= 100
+
+
+def test_generate_thumbnail_dimensions_match_saved_file(large_photo_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(large_photo_path.parent, tz_offset="+07:00")[0]
+    thumb_path = generate_thumbnail(photo, tmp_path / "thumbs", max_px=100)
+    saved = PILImage.open(thumb_path)
+    assert photo.thumb_width == saved.width
+    assert photo.thumb_height == saved.height
+
+
+def test_generate_thumbnail_sets_dimensions_on_skip(large_photo_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(large_photo_path.parent, tz_offset="+07:00")[0]
+    out_dir = tmp_path / "thumbs"
+    generate_thumbnail(photo, out_dir, max_px=100)
+    # second call hits the skip-write path; dims must still be populated
+    photo.thumb_width = None
+    photo.thumb_height = None
+    generate_thumbnail(photo, out_dir, max_px=100)
+    assert photo.thumb_width is not None
+    assert photo.thumb_height is not None

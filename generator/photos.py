@@ -131,7 +131,7 @@ def interpolate_by_time(
 def generate_thumbnail(photo: Photo, out_dir: Path, max_px: int = 800) -> Path:
     """Write a JPEG thumbnail (longest edge ≤ max_px) to out_dir/<filename>.
 
-    Sets photo.thumb_path. Skips writing if the file already exists.
+    Sets photo.thumb_path, thumb_width, thumb_height. Skips writing if file exists.
     Returns the output path.
     """
     out_path = out_dir / photo.filename
@@ -140,6 +140,8 @@ def generate_thumbnail(photo: Photo, out_dir: Path, max_px: int = 800) -> Path:
         img = PILImage.open(photo.path)
         img.thumbnail((max_px, max_px))
         img.save(str(out_path), "JPEG", quality=85)
+    with PILImage.open(out_path) as thumb:
+        photo.thumb_width, photo.thumb_height = thumb.size
     photo.thumb_path = out_path
     return out_path
 

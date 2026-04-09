@@ -11,6 +11,7 @@ The `claude_docs/` directory contains design documents for Claude's reference:
 | `ARCHITECTURE.md` | Detailed module interfaces, data flow diagram, and design decisions. The authoritative spec for how all generator modules interact. |
 | `PROJECT_PLAN.md` | High-level goals, feature list, tech stack, repo structure, and execution phases. Useful for understanding scope and future direction. |
 | `RENDER_PLAN.md` | TDD implementation plan for Phase 1 rendering. Covers `config.py`, `generate_thumbnail`, `render.py`, templates, and CLI wiring. **Phase 1 is complete** — this file is a record of decisions made. |
+| `IMRPVOVE_VISUAL.md` | Visualization enhancement plan (marker clustering, photo lightbox, per-route selection). **All three features are complete.** |
 
 When working on this project, read the relevant `claude_docs/` file before modifying a module.
 
@@ -54,7 +55,7 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 ```
 TrackPoint: lat, lon, ele, time (UTC-aware datetime)
 Route: slug, name, points: list[TrackPoint], stats: RouteStats
-Photo: path, timestamp_local, timestamp_utc, lat/lon (optional), matched_point, match_method ("gps"|"timestamp"|"unmatched"), thumb_path
+Photo: path, timestamp_local, timestamp_utc, lat/lon (optional), matched_point, match_method ("gps"|"timestamp"|"unmatched"), thumb_path, thumb_width, thumb_height
 HikeMeta: slug, title, date, description, tags, cover, tz_offset, trim_start_m, trim_end_m
 Hike: meta, routes: list[Route], photos: list[Photo]
 ```
@@ -69,4 +70,6 @@ Hike: meta, routes: list[Route], photos: list[Photo]
 
 ### Frontend stack
 
-Leaflet + OpenStreetMap (map), Chart.js or uPlot (elevation profile), PhotoSwipe (lightbox), Fuse.js (search). Templates live in `templates/`, vendored JS/CSS in `static/`.
+Leaflet + OpenStreetMap (map), Leaflet.markercluster (photo marker clustering), Chart.js (elevation profile), PhotoSwipe v5 (photo lightbox, loaded as ES module in `hike.js`), Fuse.js (search, Phase 2). Templates live in `templates/`, static JS in `static/js/`.
+
+`hike.js` is loaded as `type="module"` so it can import PhotoSwipe via ESM. Inline data in `hike.html` uses `var` (not `const`) so the globals are accessible from the module scope.

@@ -55,6 +55,8 @@ class Photo:
     matched_point: TrackPoint | None = None
     match_method: Literal["gps", "timestamp", "unmatched"] = "unmatched"
     thumb_path: Path | None = None
+    thumb_width: int | None = None
+    thumb_height: int | None = None
 
 
 @dataclass

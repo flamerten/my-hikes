@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}MyHikes{% endblock %}</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5.4.4/dist/photoswipe.css"/>
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; }
     #map { height: 500px; }
@@ -14,12 +17,16 @@
     h1 { padding: 1rem; margin: 0; }
     .meta { padding: 0 1rem 1rem; color: #555; }
     canvas { display: block; max-height: 200px; padding: 1rem; box-sizing: border-box; width: 100%; }
+    #route-panel { display: none; padding: 0.75rem 1rem; background: #fff3f3; border-top: 2px solid #e04; }
+    #route-panel .stats { background: transparent; padding-left: 0; }
+    #route-panel-reset { margin-left: 1rem; cursor: pointer; }
   </style>
   {% block head_extra %}{% endblock %}
 </head>
 <body>
   {% block content %}{% endblock %}
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   {% block scripts %}{% endblock %}
 </body>

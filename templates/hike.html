@@ -13,15 +13,22 @@
   <li><strong>{{ "%.1f"|format(stats.avg_pace_min_km) }} min/km</strong> avg pace</li>
 </ul>
 
+<div id="route-panel">
+  <strong id="route-panel-name"></strong>
+  <button id="route-panel-reset">&larr; All routes</button>
+  <ul class="stats" id="route-panel-stats"></ul>
+</div>
+
 <div id="map"></div>
 <canvas id="elevation-chart"></canvas>
 {% endblock %}
 
 {% block scripts %}
 <script>
-  const ROUTES    = {{ routes_geojson | safe }};
-  const PINS      = {{ photo_pins | safe }};
-  const ELEVATION = {{ elevation_profile | safe }};
+  var ROUTES          = {{ routes_geojson | safe }};
+  var PINS            = {{ photo_pins | safe }};
+  var ELEVATION       = {{ elevation_profile | safe }};
+  var ROUTE_ELEVATION = {{ per_route_elevation | safe }};
 </script>
-<script src="/static/js/hike.js"></script>
+<script type="module" src="/static/js/hike.js"></script>
 {% endblock %}
