@@ -6,14 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from generator.models import Route
+from generator.models import Hike, HikeMeta, Route
 from generator.render import (
     aggregate_stats,
     elevation_profile,
     per_route_elevation,
     photos_to_pins,
     render_hike,
+    render_home,
     routes_to_geojson,
+    write_meta_json,
 )
 
 
@@ -269,3 +271,103 @@ def test_per_route_elevation_ele_matches_trackpoints(single_route: Route) -> Non
 
 def test_per_route_elevation_is_json_serialisable(single_route: Route) -> None:
     json.dumps(per_route_elevation([single_route]))
+
+
+# ---------------------------------------------------------------------------
+# write_meta_json
+# ---------------------------------------------------------------------------
+
+
+def test_write_meta_json_creates_file(sample_hike, tmp_path: Path) -> None:
+    render_hike(sample_hike, tmp_path, Path(__file__).parent.parent / "templates")
+    write_meta_json(sample_hike, tmp_path)
+    assert (tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").exists()
+
+
+def test_write_meta_json_fields(sample_hike, tmp_path: Path) -> None:
+    render_hike(sample_hike, tmp_path, Path(__file__).parent.parent / "templates")
+    write_meta_json(sample_hike, tmp_path)
+    data = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    for field in ("slug", "title", "date", "description", "distance_m", "ele_gain_m", "cover_thumb_url"):
+        assert field in data
+
+
+def test_write_meta_json_cover_thumb_url(sample_hike, tmp_path: Path) -> None:
+    render_hike(sample_hike, tmp_path, Path(__file__).parent.parent / "templates")
+    write_meta_json(sample_hike, tmp_path)
+    data = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    assert data["cover_thumb_url"] == f"/thumbs/{sample_hike.meta.slug}/thumb.jpg"
+
+
+def test_write_meta_json_no_cover_uses_random_thumb(sample_hike, tmp_path: Path) -> None:
+    sample_hike.meta.cover = ""
+    render_hike(sample_hike, tmp_path, Path(__file__).parent.parent / "templates")
+    write_meta_json(sample_hike, tmp_path)
+    data = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    assert data["cover_thumb_url"] is not None
+    assert data["cover_thumb_url"].startswith(f"/thumbs/{sample_hike.meta.slug}/")
+
+
+def test_write_meta_json_no_cover_no_photos(sample_hike, tmp_path: Path) -> None:
+    sample_hike.meta.cover = ""
+    sample_hike.photos.clear()
+    render_hike(sample_hike, tmp_path, Path(__file__).parent.parent / "templates")
+    write_meta_json(sample_hike, tmp_path)
+    data = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    assert data["cover_thumb_url"] is None
+
+
+def test_write_meta_json_is_json_serialisable(sample_hike, tmp_path: Path) -> None:
+    render_hike(sample_hike, tmp_path, Path(__file__).parent.parent / "templates")
+    write_meta_json(sample_hike, tmp_path)
+    raw = (tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text()
+    json.loads(raw)
+
+
+# ---------------------------------------------------------------------------
+# render_home
+# ---------------------------------------------------------------------------
+
+
+def test_render_home_creates_index_html(sample_hike, tmp_path: Path, templates_dir: Path) -> None:
+    render_hike(sample_hike, tmp_path, templates_dir)
+    write_meta_json(sample_hike, tmp_path)
+    meta = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    render_home([meta], tmp_path, templates_dir)
+    assert (tmp_path / "index.html").exists()
+
+
+def test_render_home_contains_hike_title(sample_hike, tmp_path: Path, templates_dir: Path) -> None:
+    render_hike(sample_hike, tmp_path, templates_dir)
+    write_meta_json(sample_hike, tmp_path)
+    meta = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    render_home([meta], tmp_path, templates_dir)
+    html = (tmp_path / "index.html").read_text()
+    assert sample_hike.meta.title in html
+
+
+def test_render_home_contains_link_to_hike(sample_hike, tmp_path: Path, templates_dir: Path) -> None:
+    render_hike(sample_hike, tmp_path, templates_dir)
+    write_meta_json(sample_hike, tmp_path)
+    meta = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    render_home([meta], tmp_path, templates_dir)
+    html = (tmp_path / "index.html").read_text()
+    assert f"/hikes/{sample_hike.meta.slug}/index.html" in html
+
+
+def test_render_home_sorts_newest_first(tmp_path: Path, templates_dir: Path) -> None:
+    older = {"slug": "old-hike", "title": "Old Hike", "date": "2025-01-01",
+             "description": "", "tags": [], "cover_thumb_url": None,
+             "distance_m": 10000.0, "ele_gain_m": 100.0, "ele_loss_m": 100.0}
+    newer = {"slug": "new-hike", "title": "New Hike", "date": "2026-01-01",
+             "description": "", "tags": [], "cover_thumb_url": None,
+             "distance_m": 10000.0, "ele_gain_m": 100.0, "ele_loss_m": 100.0}
+    render_home([older, newer], tmp_path, templates_dir)
+    html = (tmp_path / "index.html").read_text()
+    assert html.index("New Hike") < html.index("Old Hike")
+
+
+def test_render_home_empty_list(tmp_path: Path, templates_dir: Path) -> None:
+    render_home([], tmp_path, templates_dir)
+    html = (tmp_path / "index.html").read_text()
+    assert "MyHikes" in html

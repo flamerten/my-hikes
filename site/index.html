@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyHikes</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/photoswipe@5.4.4/dist/photoswipe.css"/>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    #map { height: 500px; }
+    .stats { display: flex; gap: 1.5rem; list-style: none; padding: 1rem; margin: 0; background: #f5f5f5; }
+    .stats li { font-size: 0.9rem; }
+    .stats li strong { display: block; font-size: 1.1rem; }
+    h1 { padding: 1rem; margin: 0; }
+    .meta { padding: 0 1rem 1rem; color: #555; }
+    canvas { display: block; max-height: 200px; padding: 1rem; box-sizing: border-box; width: 100%; }
+    #route-panel { display: none; padding: 0.75rem 1rem; background: #fff3f3; border-top: 2px solid #e04; }
+    #route-panel .stats { background: transparent; padding-left: 0; }
+    #route-panel-reset { margin-left: 1rem; cursor: pointer; }
+  </style>
+  
+<style>
+  .hike-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+  .hike-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s;
+  }
+  .hike-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .hike-card-cover {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    background: #e8e8e8;
+    display: block;
+  }
+  .hike-card-body { padding: 0.75rem 1rem 1rem; flex: 1; }
+  .hike-card-title { margin: 0 0 0.25rem; font-size: 1.1rem; }
+  .hike-card-date { font-size: 0.8rem; color: #777; margin: 0 0 0.5rem; }
+  .hike-card-desc { font-size: 0.875rem; color: #444; margin: 0 0 0.75rem; }
+  .hike-card-stats { display: flex; gap: 1rem; font-size: 0.8rem; color: #555; list-style: none; padding: 0; margin: 0; }
+  .hike-card-stats li strong { display: block; font-size: 0.95rem; color: #111; }
+  h1.site-title { padding: 1rem 1.5rem 0; }
+</style>
+
+</head>
+<body>
+  
+<h1 class="site-title">MyHikes</h1>
+<div class="hike-grid">
+  
+  <a class="hike-card" href="/hikes/2026-04-jungle-trek/index.html">
+    
+    <img class="hike-card-cover" src="/thumbs/2026-04-jungle-trek/PXL_20260401_013612693.jpg" alt="Jungle Trek cover photo" loading="lazy">
+    
+    <div class="hike-card-body">
+      <h2 class="hike-card-title">Jungle Trek</h2>
+      <p class="hike-card-date">2026-04-01</p>
+      
+      <p class="hike-card-desc">5-day jungle trek through Gunung Leuser with a rafting finish.</p>
+      
+      <ul class="hike-card-stats">
+        <li><strong>36.1 km</strong> distance</li>
+        <li><strong>2127 m</strong> gain</li>
+      </ul>
+    </div>
+  </a>
+  
+</div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  
+</body>
+</html>

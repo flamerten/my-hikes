@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}MyHikes{% endblock %}
+
+{% block head_extra %}
+<style>
+  .hike-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+  .hike-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow 0.2s;
+  }
+  .hike-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+  .hike-card-cover {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    background: #e8e8e8;
+    display: block;
+  }
+  .hike-card-body { padding: 0.75rem 1rem 1rem; flex: 1; }
+  .hike-card-title { margin: 0 0 0.25rem; font-size: 1.1rem; }
+  .hike-card-date { font-size: 0.8rem; color: #777; margin: 0 0 0.5rem; }
+  .hike-card-desc { font-size: 0.875rem; color: #444; margin: 0 0 0.75rem; }
+  .hike-card-stats { display: flex; gap: 1rem; font-size: 0.8rem; color: #555; list-style: none; padding: 0; margin: 0; }
+  .hike-card-stats li strong { display: block; font-size: 0.95rem; color: #111; }
+  h1.site-title { padding: 1rem 1.5rem 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1 class="site-title">MyHikes</h1>
+<div class="hike-grid">
+  {% for hike in hikes %}
+  <a class="hike-card" href="/hikes/{{ hike.slug }}/index.html">
+    {% if hike.cover_thumb_url %}
+    <img class="hike-card-cover" src="{{ hike.cover_thumb_url }}" alt="{{ hike.title }} cover photo" loading="lazy">
+    {% else %}
+    <div class="hike-card-cover"></div>
+    {% endif %}
+    <div class="hike-card-body">
+      <h2 class="hike-card-title">{{ hike.title }}</h2>
+      <p class="hike-card-date">{{ hike.date }}</p>
+      {% if hike.description %}
+      <p class="hike-card-desc">{{ hike.description }}</p>
+      {% endif %}
+      <ul class="hike-card-stats">
+        <li><strong>{{ "%.1f"|format(hike.distance_m / 1000) }} km</strong> distance</li>
+        <li><strong>{{ hike.ele_gain_m | int }} m</strong> gain</li>
+      </ul>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

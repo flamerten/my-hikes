@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import random
 from datetime import timedelta
 from pathlib import Path
 
@@ -98,6 +99,40 @@ def aggregate_stats(routes: list[Route]) -> RouteStats:
         max_ele_m=max(r.stats.max_ele_m for r in routes),
         min_ele_m=min(r.stats.min_ele_m for r in routes),
     )
+
+
+def write_meta_json(hike: Hike, out_dir: Path) -> None:
+    """Write site/hikes/<slug>/meta.json for use by the home page builder."""
+    stats = aggregate_stats(hike.routes)
+    slug = hike.meta.slug
+    if hike.meta.cover:
+        cover_thumb_url = f"/thumbs/{slug}/{hike.meta.cover}"
+    else:
+        thumbed = [p for p in hike.photos if p.thumb_path]
+        cover_thumb_url = f"/thumbs/{slug}/{random.choice(thumbed).filename}" if thumbed else None
+    data = {
+        "slug": slug,
+        "title": hike.meta.title,
+        "date": str(hike.meta.date),
+        "description": hike.meta.description,
+        "tags": hike.meta.tags,
+        "cover_thumb_url": cover_thumb_url,
+        "distance_m": round(stats.distance_m, 1),
+        "ele_gain_m": round(stats.ele_gain_m, 1),
+        "ele_loss_m": round(stats.ele_loss_m, 1),
+    }
+    out_path = out_dir / "hikes" / slug / "meta.json"
+    out_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def render_home(hike_metas: list[dict], out_dir: Path, templates_dir: Path) -> None:
+    """Render site/index.html from a list of meta.json dicts, sorted newest-first."""
+    env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=True)
+    tmpl = env.get_template("home.html")
+    hikes_sorted = sorted(hike_metas, key=lambda h: h["date"], reverse=True)
+    html = tmpl.render(hikes=hikes_sorted)
+    out_path = out_dir / "index.html"
+    out_path.write_text(html, encoding="utf-8")
 
 
 def render_hike(hike: Hike, out_dir: Path, templates_dir: Path) -> None:
