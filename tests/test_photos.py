@@ -9,6 +9,8 @@ import pytest
 from generator.models import Route, TrackPoint
 from PIL import Image as PILImage
 
+from unittest.mock import patch
+
 from generator.photos import (
     generate_thumbnail,
     interpolate_by_time,
@@ -67,6 +69,44 @@ def test_load_photos_no_exif_no_gps(photo_no_exif_path: Path) -> None:
     photos = load_photos(photo_no_exif_path.parent, tz_offset="+07:00")
     assert photos[0].lat is None
     assert photos[0].lon is None
+
+
+def test_load_photos_video_no_creation_time_included(tmp_path: Path) -> None:
+    video = tmp_path / "test.mp4"
+    video.write_bytes(b"fake")
+    fake_frame = tmp_path / "test.jpg"
+    fake_frame.write_bytes(b"fake")
+    with patch("generator.photos._get_video_timestamp", return_value=None), \
+         patch("generator.photos._extract_video_frame", return_value=fake_frame):
+        photos = load_photos(tmp_path, tz_offset="+07:00")
+    assert len([p for p in photos if p.is_video]) == 1
+
+
+def test_load_photos_video_no_creation_time_uses_mtime(tmp_path: Path) -> None:
+    video = tmp_path / "test.mp4"
+    video.write_bytes(b"fake")
+    fake_frame = tmp_path / "test.jpg"
+    fake_frame.write_bytes(b"fake")
+    with patch("generator.photos._get_video_timestamp", return_value=None), \
+         patch("generator.photos._extract_video_frame", return_value=fake_frame):
+        photos = load_photos(tmp_path, tz_offset="+07:00")
+    p = next(x for x in photos if x.is_video)
+    mtime = datetime.fromtimestamp(video.stat().st_mtime, tz=timezone.utc)
+    assert abs((p.timestamp_utc - mtime).total_seconds()) < 2
+
+
+def test_load_photos_video_no_creation_time_local_applies_tz(tmp_path: Path) -> None:
+    video = tmp_path / "test.mp4"
+    video.write_bytes(b"fake")
+    fake_frame = tmp_path / "test.jpg"
+    fake_frame.write_bytes(b"fake")
+    with patch("generator.photos._get_video_timestamp", return_value=None), \
+         patch("generator.photos._extract_video_frame", return_value=fake_frame):
+        photos = load_photos(tmp_path, tz_offset="+07:00")
+    p = next(x for x in photos if x.is_video)
+    mtime_utc = datetime.fromtimestamp(video.stat().st_mtime, tz=timezone.utc)
+    expected_local = (mtime_utc + timedelta(hours=7)).replace(tzinfo=None)
+    assert abs((p.timestamp_local - expected_local).total_seconds()) < 2
 
 
 def test_load_photos_no_exif_local_applies_tz(photo_no_exif_path: Path) -> None:

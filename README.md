@@ -7,8 +7,8 @@ A static site generator that turns GPX tracks and photos into map-based hike pag
 | Phase | Description | Status |
 |---|---|---|
 | 1 | Single hike → HTML page with map, photo pins, elevation chart, stats | **Complete** |
-| 2 | Multi-hike — homepage, `index.json` search index | Planned |
-| 3 | Polish & deploy — Open Graph, lightbox, mobile, GitHub Actions | Planned |
+| 2 | Multi-hike — homepage with hike cards, `meta.json` sidecars | **Complete** |
+| 3 | Polish & deploy — Open Graph, `index.json` search, mobile, GitHub Actions | Planned |
 
 ## Adding a new hike
 
@@ -23,6 +23,7 @@ uv run hikes new 2026-05-01-trail-name
 
 # 3. Build and preview
 uv run hikes build --hike 2026-05-01-trail-name
+uv run hikes build-index
 uv run hikes serve
 # open http://localhost:8000/hikes/2026-05-01-trail-name/
 ```
@@ -34,7 +35,8 @@ uv run hikes serve
 
 ```bash
 uv run hikes new <slug>          # scaffold raw/<slug>/ with hike.toml template
-uv run hikes build --hike <slug> # parse GPX + photos → site/hikes/<slug>/index.html
+uv run hikes build --hike <slug> # parse GPX + photos → site/hikes/<slug>/index.html + meta.json
+uv run hikes build-index         # rebuild site/index.html home page from all meta.json sidecars
 uv run hikes serve [--port 8000] # serve site/ over HTTP for local preview
 ```
 
@@ -51,15 +53,16 @@ generator/
   config.py          # hike.toml → HikeMeta
   gpx.py             # GPX parsing, blip filtering, stats
   photos.py          # EXIF extraction, thumbnail generation, photo-to-track matching
-  render.py          # GeoJSON helpers and Jinja2 rendering
+  render.py          # GeoJSON helpers and Jinja2 rendering → hike pages, meta.json sidecars, home page
   cli.py             # CLI entry point (build / new / serve)
 
 templates/
   base.html          # CDN links for Leaflet + Chart.js, block structure
   hike.html          # per-hike page
+  home.html          # home page (hike cards grid)
 
 static/
-  js/hike.js         # Leaflet map + Chart.js elevation profile initialisation
+  js/hike.js         # Leaflet map, Chart.js elevation profile, photo gallery grid
 
 tests/
   conftest.py        # shared fixtures
@@ -113,4 +116,4 @@ uv sync
 
 Requires Python 3.13+. Dependencies are managed with `uv` and locked in `uv.lock`.
 
-**Optional:** Install `ffmpeg` (and `ffprobe`) for video poster-frame extraction. If not on `PATH`, video files in `media/` are silently skipped during build.
+**Optional:** Install `ffmpeg` (and `ffprobe`) for video poster-frame extraction. If not on `PATH`, video files in `media/` are silently skipped during build. Videos that lack a `creation_time` metadata tag fall back to the file's modification time instead of being skipped.

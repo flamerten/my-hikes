@@ -62,7 +62,7 @@ def load_photos(photos_dir: Path, tz_offset: str) -> list[Photo]:
             continue
         timestamp_utc = _get_video_timestamp(path)
         if timestamp_utc is None:
-            continue
+            timestamp_utc = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
         frame_path = _extract_video_frame(path, frame_dir)
         if frame_path is None:
             continue
