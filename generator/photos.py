@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import piexif
+from PIL import Image as PILImage
 
 from generator.models import Photo, Route, TrackPoint, haversine_m
 
@@ -125,6 +126,22 @@ def interpolate_by_time(
                 )
 
     return None
+
+
+def generate_thumbnail(photo: Photo, out_dir: Path, max_px: int = 800) -> Path:
+    """Write a JPEG thumbnail (longest edge ≤ max_px) to out_dir/<filename>.
+
+    Sets photo.thumb_path. Skips writing if the file already exists.
+    Returns the output path.
+    """
+    out_path = out_dir / photo.filename
+    if not out_path.exists():
+        out_dir.mkdir(parents=True, exist_ok=True)
+        img = PILImage.open(photo.path)
+        img.thumbnail((max_px, max_px))
+        img.save(str(out_path), "JPEG", quality=85)
+    photo.thumb_path = out_path
+    return out_path
 
 
 # ---------------------------------------------------------------------------

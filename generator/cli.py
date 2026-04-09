@@ -2,51 +2,102 @@
 from __future__ import annotations
 
 import argparse
+import functools
+import http.server
+import shutil
 from pathlib import Path
 
+from generator.config import load_hike_meta
 from generator.gpx import load_routes
-from generator.photos import load_photos, match_photos
+from generator.models import Hike
+from generator.photos import generate_thumbnail, load_photos, match_photos
+from generator.render import render_hike
+
+_TOML_TEMPLATE = """\
+title = "{title}"
+date = "{date}"
+description = ""
+tags = []
+cover = ""
+tz_offset = "+00:00"
+trim_start_m = 0
+trim_end_m = 0
+"""
 
 
 def main() -> None:
-    """Parse CLI arguments and dispatch to the appropriate command."""
     parser = argparse.ArgumentParser(prog="hikes")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    build_p = sub.add_parser("build", help="Build one or all hikes.")
-    build_p.add_argument("--hike", required=True, metavar="SLUG",
-                         help="Slug of the hike directory under raw/.")
-    build_p.add_argument("--tz-offset", default="+00:00", metavar="OFFSET",
-                         help="Local timezone offset, e.g. +07:00.")
+    build_p = sub.add_parser("build", help="Build one hike.")
+    build_p.add_argument("--hike", required=True, metavar="SLUG")
+
+    new_p = sub.add_parser("new", help="Scaffold a new hike directory.")
+    new_p.add_argument("slug", metavar="SLUG",
+                       help="Directory name, e.g. 2026-05-01-trail-name")
+
+    serve_p = sub.add_parser("serve", help="Serve site/ over HTTP for local preview.")
+    serve_p.add_argument("--port", type=int, default=8000)
 
     args = parser.parse_args()
 
     if args.command == "build":
-        _build(args.hike, args.tz_offset)
+        _build(args.hike)
+    elif args.command == "new":
+        _new(args.slug)
+    elif args.command == "serve":
+        _serve(args.port)
 
 
-def _build(slug: str, tz_offset: str) -> None:
-    """Load, match, and summarise a single hike from raw/<slug>/.
-
-    Args:
-        slug: Hike directory name under raw/.
-        tz_offset: Local timezone offset string, e.g. "+07:00".
-    """
+def _build(slug: str) -> None:
     hike_dir = Path("raw") / slug
+    out_dir = Path("site")
 
+    meta = load_hike_meta(hike_dir)
     routes = load_routes(hike_dir / "routes")
-    print(f"{len(routes)} routes loaded")
-    for r in routes:
-        print(
-            f"  {r.slug}: {r.stats.distance_m / 1000:.1f} km, "
-            f"{r.stats.ele_gain_m:.0f} m gain, {len(r.points)} pts"
-        )
-
-    photos = load_photos(hike_dir / "photos", tz_offset=tz_offset)
-    print(f"{len(photos)} photos loaded")
-
+    photos = load_photos(hike_dir / "photos", tz_offset=meta.tz_offset)
     match_photos(photos, routes)
-    by_method: dict[str, int] = {}
+
+    thumbs_dir = out_dir / "thumbs" / slug
     for p in photos:
-        by_method[p.match_method] = by_method.get(p.match_method, 0) + 1
-    print("match breakdown:", by_method)
+        generate_thumbnail(p, thumbs_dir)
+
+    gpx_out = out_dir / "hikes" / slug
+    gpx_out.mkdir(parents=True, exist_ok=True)
+    for gpx_file in (hike_dir / "routes").glob("*.gpx"):
+        shutil.copy(gpx_file, gpx_out / gpx_file.name)
+
+    render_hike(Hike(meta=meta, routes=routes, photos=photos), out_dir, Path("templates"))
+
+    static_src = Path("static")
+    if static_src.exists():
+        shutil.copytree(static_src, out_dir / "static", dirs_exist_ok=True)
+
+    print(f"built → {out_dir}/hikes/{slug}/index.html")
+
+
+def _new(slug: str) -> None:
+    hike_dir = Path("raw") / slug
+    if hike_dir.exists():
+        print(f"error: {hike_dir} already exists")
+        return
+    (hike_dir / "routes").mkdir(parents=True)
+    (hike_dir / "photos").mkdir(parents=True)
+    title = slug.replace("-", " ").title()
+    # derive date from slug prefix if it looks like YYYY-MM-DD-...
+    date = slug[:10] if len(slug) >= 10 and slug[4] == "-" and slug[7] == "-" else "YYYY-MM-DD"
+    (hike_dir / "hike.toml").write_text(_TOML_TEMPLATE.format(title=title, date=date))
+    print(f"scaffolded {hike_dir}/")
+    print(f"  edit {hike_dir}/hike.toml, drop GPX files into routes/, photos into photos/")
+
+
+def _serve(port: int = 8000) -> None:
+    site_dir = Path("site")
+    if not site_dir.exists():
+        print("error: site/ does not exist — run `hikes build` first")
+        return
+    handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(site_dir))
+    with http.server.HTTPServer(("", port), handler) as httpd:
+        print(f"serving site/ at http://localhost:{port}/")
+        print("press Ctrl+C to stop")
+        httpd.serve_forever()

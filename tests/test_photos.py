@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 from generator.models import Route, TrackPoint
+from PIL import Image as PILImage
+
 from generator.photos import (
+    generate_thumbnail,
     interpolate_by_time,
     load_photos,
     match_photos,
@@ -118,3 +121,44 @@ def test_match_photos_mutates_in_place(nearby_photo_with_gps, single_route: Rout
     original_list = [nearby_photo_with_gps]
     result = match_photos(original_list, [single_route])
     assert result is original_list
+
+
+# ---------------------------------------------------------------------------
+# generate_thumbnail
+# ---------------------------------------------------------------------------
+
+
+def test_generate_thumbnail_creates_file(photo_gps_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(photo_gps_path.parent, tz_offset="+07:00")[0]
+    thumb = generate_thumbnail(photo, tmp_path / "thumbs")
+    assert thumb.exists()
+
+
+def test_generate_thumbnail_longest_edge_capped(large_photo_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(large_photo_path.parent, tz_offset="+07:00")[0]
+    thumb = generate_thumbnail(photo, tmp_path / "thumbs", max_px=100)
+    img = PILImage.open(thumb)
+    assert max(img.size) <= 100
+
+
+def test_generate_thumbnail_sets_thumb_path(photo_gps_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(photo_gps_path.parent, tz_offset="+07:00")[0]
+    generate_thumbnail(photo, tmp_path / "thumbs")
+    assert photo.thumb_path is not None
+    assert photo.thumb_path.name == photo.filename
+
+
+def test_generate_thumbnail_skips_existing(photo_gps_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(photo_gps_path.parent, tz_offset="+07:00")[0]
+    out_dir = tmp_path / "thumbs"
+    path1 = generate_thumbnail(photo, out_dir)
+    mtime = path1.stat().st_mtime
+    generate_thumbnail(photo, out_dir)
+    assert path1.stat().st_mtime == mtime
+
+
+def test_generate_thumbnail_returns_path_in_out_dir(photo_gps_path: Path, tmp_path: Path) -> None:
+    photo = load_photos(photo_gps_path.parent, tz_offset="+07:00")[0]
+    out_dir = tmp_path / "thumbs"
+    thumb = generate_thumbnail(photo, out_dir)
+    assert thumb.parent == out_dir

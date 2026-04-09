@@ -8,7 +8,7 @@ import piexif
 import pytest
 from PIL import Image
 
-from generator.models import Photo, Route, RouteStats, TrackPoint
+from generator.models import Hike, HikeMeta, Photo, Route, RouteStats, TrackPoint
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -182,3 +182,84 @@ def photo_outside_window(tmp_path: Path, single_route: Route) -> Photo:
     """Photo without GPS whose timestamp is outside every route window."""
     far_time = single_route.points[0].time - timedelta(days=365)
     return _make_photo(None, None, far_time, tmp_path)
+
+
+# ---------------------------------------------------------------------------
+# config fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def hike_dir(tmp_path: Path) -> Path:
+    """Minimal hike directory with a valid hike.toml."""
+    toml = (
+        'title = "Test Hike"\n'
+        'date = "2026-04-01"\n'
+        'description = "A test hike."\n'
+        'tags = ["test", "jungle"]\n'
+        'cover = "cover.jpg"\n'
+        'tz_offset = "+07:00"\n'
+    )
+    (tmp_path / "hike.toml").write_text(toml)
+    return tmp_path
+
+
+# ---------------------------------------------------------------------------
+# thumbnail fixture
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def large_photo_path(tmp_path: Path) -> Path:
+    """400×300 JPEG with DateTimeOriginal EXIF and no GPS."""
+    exif_dict: dict = {"0th": {}, "Exif": {}, "GPS": {}, "1st": {}}
+    exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = b"2026:04:01 09:00:00"
+    out = tmp_path / "large.jpg"
+    img = Image.new("RGB", (400, 300), (100, 150, 200))
+    img.save(str(out), "JPEG", exif=piexif.dump(exif_dict))
+    return out
+
+
+# ---------------------------------------------------------------------------
+# render fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def matched_photo(tmp_path: Path, single_route: Route) -> Photo:
+    """Photo with a populated matched_point and thumb_path."""
+    pt = single_route.points[0]
+    p = _make_photo(pt.lat, pt.lon, pt.time, tmp_path)
+    p.matched_point = pt
+    p.match_method = "gps"
+    p.thumb_path = tmp_path / "thumb.jpg"
+    return p
+
+
+@pytest.fixture
+def unmatched_photo(tmp_path: Path, single_route: Route) -> Photo:
+    """Photo with no matched_point."""
+    far_time = single_route.points[0].time - timedelta(days=365)
+    return _make_photo(None, None, far_time, tmp_path, filename="unmatched.jpg")
+
+
+@pytest.fixture
+def two_routes(single_route: Route) -> list[Route]:
+    """Two non-overlapping routes for aggregate_stats tests."""
+    t = datetime(2026, 4, 2, tzinfo=timezone.utc)
+    return [single_route, _make_route(t)]
+
+
+@pytest.fixture
+def sample_hike(tmp_path: Path, single_route: Route, matched_photo: Photo) -> Hike:
+    meta = HikeMeta(
+        slug="test-hike", title="Test Hike", date="2026-04-01",
+        description="A test.", tags=["test"], cover="thumb.jpg",
+        tz_offset="+07:00",
+    )
+    return Hike(meta=meta, routes=[single_route], photos=[matched_photo])
+
+
+@pytest.fixture
+def templates_dir() -> Path:
+    return Path(__file__).parent.parent / "templates"

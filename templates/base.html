@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}MyHikes{% endblock %}</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; }
+    #map { height: 500px; }
+    .stats { display: flex; gap: 1.5rem; list-style: none; padding: 1rem; margin: 0; background: #f5f5f5; }
+    .stats li { font-size: 0.9rem; }
+    .stats li strong { display: block; font-size: 1.1rem; }
+    h1 { padding: 1rem; margin: 0; }
+    .meta { padding: 0 1rem 1rem; color: #555; }
+    canvas { display: block; max-height: 200px; padding: 1rem; box-sizing: border-box; width: 100%; }
+  </style>
+  {% block head_extra %}{% endblock %}
+</head>
+<body>
+  {% block content %}{% endblock %}
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

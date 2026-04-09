@@ -10,20 +10,17 @@ The `claude_docs/` directory contains design documents for Claude's reference:
 |---|---|
 | `ARCHITECTURE.md` | Detailed module interfaces, data flow diagram, and design decisions. The authoritative spec for how all generator modules interact. |
 | `PROJECT_PLAN.md` | High-level goals, feature list, tech stack, repo structure, and execution phases. Useful for understanding scope and future direction. |
+| `RENDER_PLAN.md` | TDD implementation plan for Phase 1 rendering. Covers `config.py`, `generate_thumbnail`, `render.py`, templates, and CLI wiring. **Phase 1 is complete** — this file is a record of decisions made. |
 
 When working on this project, read the relevant `claude_docs/` file before modifying a module.
 
 ## Commands
 
 ```bash
-# Run the CLI
-uv run hikes build              # build all hikes
-uv run hikes build --hike SLUG  # build one hike
-uv run hikes new                # scaffold a new hike directory
-uv run hikes deploy             # build + push to gh-pages
-
-# Run main entry point (stub only, real entry is generator/cli.py)
-uv run python main.py
+uv run hikes build --hike SLUG  # build one hike → site/hikes/<slug>/index.html
+uv run hikes new SLUG           # scaffold raw/<slug>/ with hike.toml template
+uv run hikes serve [--port N]   # serve site/ over HTTP (default port 8000)
+uv run pytest tests/            # run all tests
 ```
 
 Always use `uv run python` — never bare `python` or `python3`.
@@ -43,14 +40,14 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 
 ### Module responsibilities (`generator/`)
 
-| Module | Role |
-|---|---|
-| `cli.py` | argparse entry point; orchestrates the build pipeline |
-| `config.py` | Parses `hike.toml` → `HikeMeta` |
-| `gpx.py` | Parses GPX → `Route`/`TrackPoint`; filters GPS blips; computes `RouteStats` |
-| `photos.py` | Reads EXIF, matches photos to track positions, generates thumbnails |
-| `render.py` | Jinja2 rendering → `site/hikes/<slug>/index.html`, homepage, search page |
-| `index.py` | Builds `site/index.json` for client-side Fuse.js search |
+| Module | Role | Status |
+|---|---|---|
+| `cli.py` | argparse entry point; `build`, `new`, `serve` commands | Done |
+| `config.py` | Parses `hike.toml` → `HikeMeta` | Done |
+| `gpx.py` | Parses GPX → `Route`/`TrackPoint`; filters GPS blips; computes `RouteStats` | Done |
+| `photos.py` | Reads EXIF, matches photos to track positions, generates thumbnails | Done |
+| `render.py` | GeoJSON helpers + Jinja2 rendering → `site/hikes/<slug>/index.html` | Done |
+| `index.py` | Builds `site/index.json` for client-side Fuse.js search | **Phase 2** |
 
 ### Core data models
 
