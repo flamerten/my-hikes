@@ -13,33 +13,47 @@ The `claude_docs/` directory contains design documents for Claude's reference:
 | `RENDER_PLAN.md` | TDD implementation plan for Phase 1 rendering. Covers `config.py`, `generate_thumbnail`, `render.py`, templates, and CLI wiring. **Phase 1 is complete** — this file is a record of decisions made. |
 | `IMRPVOVE_VISUAL.md` | Visualization enhancement plan (marker clustering, photo lightbox, per-route selection). **All three features are complete.** |
 | `HOME_PAGE_PLAN.md` | Home page implementation plan (hike cards, cover photo, meta.json sidecar, `build-index` command). **Complete.** |
+| `CLOUDFLARE_PORT.md` | R2 thumbnail storage migration plan (boto3 upload, `--no-r2` flag, `r2-check` command). **Complete.** |
 
 When working on this project, read the relevant `claude_docs/` file before modifying a module.
 
 ## Commands
 
 ```bash
-uv run hikes build --hike SLUG                   # build one hike → site/hikes/<slug>/index.html + meta.json sidecar
-uv run hikes build --hike SLUG --base-url /REPO  # same, with asset paths prefixed for GitHub Pages
+uv run hikes build --hike SLUG                   # build one hike → uploads thumbs to R2, writes R2 URLs into HTML
+uv run hikes build --hike SLUG --no-r2           # build without R2 — thumbnails stay in site/thumbs/, local URLs
+uv run hikes build --hike SLUG --base-url /REPO  # prefix all asset paths for GitHub Pages
 uv run hikes build-index                         # build site/index.html home page from all meta.json sidecars
-uv run hikes build-index --base-url /REPO        # same, with asset paths prefixed for GitHub Pages
+uv run hikes build-index --base-url /REPO        # same, with asset path prefix
 uv run hikes new SLUG                            # scaffold raw/<slug>/ with hike.toml template
 uv run hikes serve [--port N]                    # serve site/ over HTTP (default port 8000)
+uv run hikes r2-check                            # verify R2 credentials and bucket connectivity
 uv run pytest tests/                             # run all tests
 ```
 
-Typical workflow when adding a hike:
+Typical workflow when adding a hike (with R2):
 ```bash
-uv run hikes build --hike <slug>   # builds hike page and writes meta.json
-uv run hikes build-index           # rebuilds home page to include the new hike
-uv run hikes serve                 # preview at http://localhost:8000/
+source .env                                      # load CF_R2_* environment variables
+uv run hikes build --hike <slug>                 # uploads thumbnails to R2, writes meta.json
+uv run hikes build-index                         # rebuilds home page
+uv run hikes serve                               # preview at http://localhost:8000/
+```
+
+Typical workflow for local-only preview (no R2 upload, thumbnails in site/thumbs/):
+```bash
+uv run hikes build --hike <slug> --no-r2
+uv run hikes build-index
+uv run hikes serve
 ```
 
 Workflow when building for GitHub Pages deployment (repo is `my-hikes`):
 ```bash
-uv run hikes build --hike <slug> --base-url /my-hikes
+source .env
+uv run hikes build --hike <slug> --base-url /my-hikes   # uploads to R2, HTML uses R2 URLs
 uv run hikes build-index --base-url /my-hikes
-# commit site/ and push — GitHub Actions deploys automatically
+git add site/   # site/thumbs/ is gitignored — only HTML + GPX + static assets are committed
+git commit -m "build: <slug>"
+git push        # GitHub Actions uploads site/ to Pages; thumbnails already in R2
 ```
 
 Always use `uv run python` — never bare `python` or `python3`.
@@ -55,17 +69,18 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 
 **Output:** `site/` (committed to `main`, deployed via GitHub Actions to GitHub Pages)
 
-**Photo storage:** Only compressed thumbnails are stored. Thumbnails are generated during the build and deployed to GitHub Pages alongside the HTML. Original photos are gitignored and never uploaded anywhere.
+**Thumbnail storage:** Thumbnails are generated locally into `site/thumbs/` (gitignored build cache) and uploaded to Cloudflare R2 during build. The rendered HTML embeds R2 public URLs. Original photos are gitignored and never uploaded anywhere.
 
 ### Module responsibilities (`generator/`)
 
 | Module | Role | Status |
 |---|---|---|
-| `cli.py` | argparse entry point; `build`, `build-index`, `new`, `serve` commands | Done |
+| `cli.py` | argparse entry point; `build`, `build-index`, `new`, `serve`, `r2-check` commands | Done |
 | `config.py` | Parses `hike.toml` → `HikeMeta` | Done |
 | `gpx.py` | Parses GPX → `Route`/`TrackPoint`; filters GPS blips; computes `RouteStats` | Done |
 | `photos.py` | Reads EXIF, extracts video poster frames (ffmpeg), matches media to track positions, generates thumbnails | Done |
 | `render.py` | GeoJSON helpers + Jinja2 rendering → hike pages, meta.json sidecars, home page | Done |
+| `r2.py` | Cloudflare R2 upload helpers: `upload_thumbnail`, `thumb_url`, `r2_configured`, `get_r2_client` | Done |
 | `index.py` | Builds `site/index.json` for client-side Fuse.js search | **Phase 3** |
 
 ### Core data models
@@ -86,6 +101,7 @@ Hike: meta, routes: list[Route], photos: list[Photo]
 - **UTC normalisation:** All internal datetimes are UTC-aware. `tz_offset` is applied once in `load_photos` when converting `DateTimeOriginal` → UTC and when deriving `timestamp_local` from video `creation_time`. No timezone arithmetic elsewhere.
 - **Video poster frames:** `load_photos` also processes MP4/MOV/AVI files in `media/`. It uses `ffprobe` to read `creation_time` (UTC) and duration, then `ffmpeg` to extract the middle frame into `media/.frames/<stem>.jpg`. If `ffmpeg` is not on `PATH`, videos are silently skipped. The extracted JPEG flows through the existing thumbnail and matching pipeline unchanged; `Photo.is_video = True` marks its origin.
 - **Stats are per-route and aggregate:** Templates receive both per-route stats (day breakdown table) and a rolled-up aggregate (headline stats bar).
+- **R2 thumbnail storage:** `generate_thumbnail()` writes a local JPEG to `site/thumbs/<slug>/` (used as a build cache; gitignored). When R2 is enabled (default), `upload_thumbnail()` checks `head_object` first and skips the upload if the object already exists — re-building an unchanged hike does zero uploads. The rendered HTML embeds the R2 public URL via `thumb_url_base`, not a local path. Pass `--no-r2` to build with local paths instead (useful for offline preview).
 
 ### Frontend stack
 

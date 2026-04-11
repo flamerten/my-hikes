@@ -5,13 +5,16 @@ import argparse
 import functools
 import http.server
 import json
+import os
 import shutil
+import sys
 from pathlib import Path
 
 from generator.config import load_hike_meta
 from generator.gpx import load_routes
 from generator.models import Hike
 from generator.photos import generate_thumbnail, load_photos, match_photos
+from generator.r2 import r2_configured, upload_thumbnail
 from generator.render import render_hike, render_home, write_meta_json
 
 _TOML_TEMPLATE = """\
@@ -34,6 +37,10 @@ def main() -> None:
     build_p.add_argument("--hike", required=True, metavar="SLUG")
     build_p.add_argument("--base-url", default="", metavar="URL",
                          help="URL prefix for all asset paths (e.g. /my-hikes for GitHub Pages)")
+    build_p.add_argument("--no-r2", dest="r2", action="store_false", default=True,
+                         help="Skip R2 upload and use local thumbnail paths.")
+
+    sub.add_parser("r2-check", help="Verify R2 credentials and bucket access.")
 
     build_index_p = sub.add_parser("build-index", help="Build site/index.html from already-built hike sidecars.")
     build_index_p.add_argument("--base-url", default="", metavar="URL",
@@ -49,16 +56,22 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "build":
-        _build(args.hike, args.base_url)
+        _build(args.hike, args.base_url, use_r2=args.r2)
     elif args.command == "build-index":
         _build_index(args.base_url)
     elif args.command == "new":
         _new(args.slug)
     elif args.command == "serve":
         _serve(args.port)
+    elif args.command == "r2-check":
+        _r2_check()
 
 
-def _build(slug: str, base_url: str = "") -> None:
+def _build(slug: str, base_url: str = "", use_r2: bool = True) -> None:
+    if use_r2 and not r2_configured():
+        print("error: --r2 requested but CF_R2_* environment variables are not set. Use --no-r2 for a local build.")
+        sys.exit(1)
+
     hike_dir = Path("raw") / slug
     out_dir = Path("site")
 
@@ -71,14 +84,21 @@ def _build(slug: str, base_url: str = "") -> None:
     for p in photos:
         generate_thumbnail(p, thumbs_dir)
 
+    thumb_url_base: str | None = None
+    if use_r2:
+        for p in photos:
+            if p.thumb_path:
+                upload_thumbnail(p.thumb_path, slug, p.filename)
+        thumb_url_base = f"{os.environ['CF_R2_PUBLIC_URL'].rstrip('/')}/thumbs/{slug}"
+
     gpx_out = out_dir / "hikes" / slug
     gpx_out.mkdir(parents=True, exist_ok=True)
     for gpx_file in (hike_dir / "routes").glob("*.gpx"):
         shutil.copy(gpx_file, gpx_out / gpx_file.name)
 
     hike = Hike(meta=meta, routes=routes, photos=photos)
-    render_hike(hike, out_dir, Path("templates"), base_url)
-    write_meta_json(hike, out_dir, base_url)
+    render_hike(hike, out_dir, Path("templates"), base_url, thumb_url_base)
+    write_meta_json(hike, out_dir, base_url, thumb_url_base)
 
     static_src = Path("static")
     if static_src.exists():
@@ -115,6 +135,21 @@ def _new(slug: str) -> None:
     (hike_dir / "hike.toml").write_text(_TOML_TEMPLATE.format(title=title, date=date))
     print(f"scaffolded {hike_dir}/")
     print(f"  edit {hike_dir}/hike.toml, drop GPX files into routes/, photos/videos into media/")
+
+
+def _r2_check() -> None:
+    from generator.r2 import get_r2_client
+    if not r2_configured():
+        print("error: one or more CF_R2_* environment variables are not set")
+        return
+    client = get_r2_client()
+    bucket = os.environ["CF_R2_BUCKET"]
+    try:
+        resp = client.list_objects_v2(Bucket=bucket, MaxKeys=1)
+        count = resp.get("KeyCount", 0)
+        print(f"ok: connected to bucket '{bucket}' ({count} object(s) sampled)")
+    except Exception as exc:
+        print(f"error: {exc}")
 
 
 def _serve(port: int = 8000) -> None:

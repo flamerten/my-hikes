@@ -39,8 +39,14 @@ def routes_to_geojson(routes: list[Route]) -> dict:
     return {"type": "FeatureCollection", "features": features}
 
 
-def photos_to_pins(photos: list[Photo], slug: str, base_url: str = "") -> list[dict]:
+def photos_to_pins(
+    photos: list[Photo],
+    slug: str,
+    base_url: str = "",
+    thumb_url_base: str | None = None,
+) -> list[dict]:
     """Return one dict per matched photo with lat, lon, filename, thumb_url, and dimensions."""
+    _thumb_base = thumb_url_base if thumb_url_base is not None else f"{base_url}/thumbs/{slug}"
     pins = []
     for p in photos:
         if p.matched_point is None:
@@ -49,7 +55,7 @@ def photos_to_pins(photos: list[Photo], slug: str, base_url: str = "") -> list[d
             "lat": p.matched_point.lat,
             "lon": p.matched_point.lon,
             "filename": p.filename,
-            "thumb_url": f"{base_url}/thumbs/{slug}/{p.filename}" if p.thumb_path else None,
+            "thumb_url": f"{_thumb_base}/{p.filename}" if p.thumb_path else None,
             "thumb_width": p.thumb_width,
             "thumb_height": p.thumb_height,
             "match_method": p.match_method,
@@ -58,19 +64,25 @@ def photos_to_pins(photos: list[Photo], slug: str, base_url: str = "") -> list[d
     return pins
 
 
-def photos_to_gallery(photos: list[Photo], slug: str, base_url: str = "") -> list[dict]:
+def photos_to_gallery(
+    photos: list[Photo],
+    slug: str,
+    base_url: str = "",
+    thumb_url_base: str | None = None,
+) -> list[dict]:
     """Return one dict per photo that has a thumbnail, matched or not.
 
     Unmatched photos are included so they appear in the gallery even though
     they have no map pin.
     """
+    _thumb_base = thumb_url_base if thumb_url_base is not None else f"{base_url}/thumbs/{slug}"
     result = []
     for p in photos:
         if not p.thumb_path:
             continue
         result.append({
             "filename": p.filename,
-            "thumb_url": f"{base_url}/thumbs/{slug}/{p.filename}",
+            "thumb_url": f"{_thumb_base}/{p.filename}",
             "thumb_width": p.thumb_width,
             "thumb_height": p.thumb_height,
             "is_video": p.is_video,
@@ -123,15 +135,21 @@ def aggregate_stats(routes: list[Route]) -> RouteStats:
     )
 
 
-def write_meta_json(hike: Hike, out_dir: Path, base_url: str = "") -> None:
+def write_meta_json(
+    hike: Hike,
+    out_dir: Path,
+    base_url: str = "",
+    thumb_url_base: str | None = None,
+) -> None:
     """Write site/hikes/<slug>/meta.json for use by the home page builder."""
     stats = aggregate_stats(hike.routes)
     slug = hike.meta.slug
+    _thumb_base = thumb_url_base if thumb_url_base is not None else f"{base_url}/thumbs/{slug}"
     if hike.meta.cover:
-        cover_thumb_url = f"{base_url}/thumbs/{slug}/{hike.meta.cover}"
+        cover_thumb_url = f"{_thumb_base}/{hike.meta.cover}"
     else:
         thumbed = [p for p in hike.photos if p.thumb_path]
-        cover_thumb_url = f"{base_url}/thumbs/{slug}/{random.choice(thumbed).filename}" if thumbed else None
+        cover_thumb_url = f"{_thumb_base}/{random.choice(thumbed).filename}" if thumbed else None
     data = {
         "slug": slug,
         "title": hike.meta.title,
@@ -144,6 +162,7 @@ def write_meta_json(hike: Hike, out_dir: Path, base_url: str = "") -> None:
         "ele_loss_m": round(stats.ele_loss_m, 1),
     }
     out_path = out_dir / "hikes" / slug / "meta.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
@@ -157,7 +176,13 @@ def render_home(hike_metas: list[dict], out_dir: Path, templates_dir: Path, base
     out_path.write_text(html, encoding="utf-8")
 
 
-def render_hike(hike: Hike, out_dir: Path, templates_dir: Path, base_url: str = "") -> None:
+def render_hike(
+    hike: Hike,
+    out_dir: Path,
+    templates_dir: Path,
+    base_url: str = "",
+    thumb_url_base: str | None = None,
+) -> None:
     """Render site/hikes/<slug>/index.html from templates/hike.html."""
     env = Environment(loader=FileSystemLoader(str(templates_dir)), autoescape=True)
     tmpl = env.get_template("hike.html")
@@ -166,8 +191,8 @@ def render_hike(hike: Hike, out_dir: Path, templates_dir: Path, base_url: str = 
     html = tmpl.render(
         meta=hike.meta,
         routes_geojson=json.dumps(routes_to_geojson(hike.routes)),
-        photo_pins=json.dumps(photos_to_pins(hike.photos, hike.meta.slug, base_url)),
-        photo_gallery=json.dumps(photos_to_gallery(hike.photos, hike.meta.slug, base_url)),
+        photo_pins=json.dumps(photos_to_pins(hike.photos, hike.meta.slug, base_url, thumb_url_base)),
+        photo_gallery=json.dumps(photos_to_gallery(hike.photos, hike.meta.slug, base_url, thumb_url_base)),
         elevation_profile=json.dumps(elevation_profile(hike.routes)),
         per_route_elevation=json.dumps(per_route_elevation(hike.routes)),
         stats=aggregate_stats(hike.routes),

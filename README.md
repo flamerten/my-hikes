@@ -1,6 +1,6 @@
 # MyHikes
 
-A static site generator that turns GPX tracks and photos into map-based hike pages, deployed to GitHub Pages.
+A static site generator that turns GPX tracks and photos into map-based hike pages, deployed to GitHub Pages. Thumbnails are stored in Cloudflare R2 and served directly from there — they are never committed to the repo.
 
 ## Status
 
@@ -9,6 +9,45 @@ A static site generator that turns GPX tracks and photos into map-based hike pag
 | 1 | Single hike → HTML page with map, photo pins, elevation chart, stats | **Complete** |
 | 2 | Multi-hike — homepage with hike cards, `meta.json` sidecars | **Complete** |
 | 3 | Polish & deploy — Open Graph, `index.json` search, mobile, GitHub Actions | **In progress** |
+
+---
+
+## One-time setup
+
+### R2 bucket
+
+1. In the Cloudflare dashboard: **R2 → Create bucket** (e.g. `myhikes-thumbs`).
+2. Enable **Public access** on the bucket (Bucket Settings → Public Access → Allow).
+3. Create an API token: **R2 → Manage R2 API Tokens → Create API Token**, with Object Read & Write on the bucket.
+
+### Local environment
+
+Create a `.env` file in the project root (already gitignored) with these values:
+
+```bash
+CF_R2_BUCKET=myhikes-thumbs
+CF_R2_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com
+CF_R2_ACCESS_KEY_ID=<access_key>
+CF_R2_SECRET_ACCESS_KEY=<secret_key>
+CF_R2_PUBLIC_URL=https://pub-<hash>.r2.dev
+```
+
+Verify the credentials work before running a real build:
+
+```bash
+source .env   # or: set -a && . .env && set +a
+uv run hikes r2-check
+# ok: connected to bucket 'myhikes-thumbs' (0 object(s) sampled)
+```
+
+### GitHub secrets
+
+Add the same five values as repository secrets (**Settings → Secrets and variables → Actions**):
+`CF_R2_BUCKET`, `CF_R2_ENDPOINT_URL`, `CF_R2_ACCESS_KEY_ID`, `CF_R2_SECRET_ACCESS_KEY`, `CF_R2_PUBLIC_URL`.
+
+In **Settings → Pages → Source**, select **GitHub Actions**.
+
+---
 
 ## Adding a new hike
 
@@ -20,39 +59,72 @@ uv run hikes new 2026-05-01-trail-name
 #    raw/2026-05-01-trail-name/routes/  ← .gpx exports from Garmin
 #    raw/2026-05-01-trail-name/media/   ← original JPEGs and/or MP4/MOV/AVI videos (gitignored)
 #    edit raw/2026-05-01-trail-name/hike.toml  ← fill in title, description, tags, cover, tz_offset
+```
 
-# 3. Build and preview locally
+### Preview locally (thumbnails served from R2)
+
+```bash
+source .env   # load R2 credentials
 uv run hikes build --hike 2026-05-01-trail-name
 uv run hikes build-index
 uv run hikes serve
 # open http://localhost:8000/hikes/2026-05-01-trail-name/
+# thumbnails load from R2 — internet access required
+```
 
-# 4. Build for GitHub Pages (repo name is the base URL path)
-uv run hikes build --hike 2026-05-01-trail-name --base-url /my-hikes
-uv run hikes build-index --base-url /my-hikes
+### Preview locally (thumbnails served locally, no R2 needed)
+
+```bash
+uv run hikes build --hike 2026-05-01-trail-name --no-r2
+uv run hikes build-index
+uv run hikes serve
+# open http://localhost:8000/hikes/2026-05-01-trail-name/
+# thumbnails load from site/thumbs/ — works fully offline
 ```
 
 > **Always preview over HTTP, not by opening the file directly.** OSM tile servers
 > block `file://` requests, and `/static/` paths resolve incorrectly outside a server.
 
+---
+
+## Deploying to GitHub Pages
+
+The build must be run locally because `raw/` (original media) is gitignored and unavailable in CI. CI only uploads the pre-built `site/` directory.
+
+```bash
+# 1. Load R2 credentials
+source .env
+
+# 2. Build each hike (uploads thumbnails to R2, writes R2 URLs into HTML)
+uv run hikes build --hike <slug> --base-url /my-hikes
+
+# 3. Rebuild the home page
+uv run hikes build-index --base-url /my-hikes
+
+# 4. Commit site/ (site/thumbs/ is gitignored — only HTML + GPX + static assets)
+git add site/
+git commit -m "build: <slug>"
+git push
+```
+
+GitHub Actions picks up the push, uploads `site/` to Pages, and the live site is updated. Thumbnails are already in R2 from step 2 and load directly in the browser from there.
+
+---
+
 ## Commands
 
 ```bash
-uv run hikes new <slug>                            # scaffold raw/<slug>/ with hike.toml template
-uv run hikes build --hike <slug>                   # parse GPX + photos → site/hikes/<slug>/index.html + meta.json
-uv run hikes build --hike <slug> --base-url <url>  # same, with asset paths prefixed (e.g. /my-hikes for GitHub Pages)
-uv run hikes build-index                           # rebuild site/index.html home page from all meta.json sidecars
-uv run hikes build-index --base-url <url>          # same, with asset paths prefixed
-uv run hikes serve [--port 8000]                   # serve site/ over HTTP for local preview
+uv run hikes new <slug>                             # scaffold raw/<slug>/ with hike.toml template
+uv run hikes build --hike <slug>                    # build hike, upload thumbs to R2, embed R2 URLs
+uv run hikes build --hike <slug> --no-r2            # build hike with local thumbnail paths (no upload)
+uv run hikes build --hike <slug> --base-url <url>   # prefix all asset paths (required for GitHub Pages)
+uv run hikes build-index                            # rebuild site/index.html from all meta.json sidecars
+uv run hikes build-index --base-url <url>           # same, with asset path prefix
+uv run hikes serve [--port 8000]                    # serve site/ over HTTP for local preview
+uv run hikes r2-check                               # verify R2 credentials and bucket connectivity
 ```
 
-## Deployment
-
-The site is deployed to GitHub Pages via `.github/workflows/deploy.yml`, which runs on every push to `main` and deploys the committed `site/` directory.
-
-**One-time setup:** In the repo settings, go to **Pages → Source** and select **GitHub Actions**.
-
-Because original media (`raw/`) is gitignored and can't be regenerated in CI, the pre-built `site/` directory is committed to the repo. Always rebuild with `--base-url /my-hikes` before committing so asset paths resolve correctly on GitHub Pages.
+---
 
 ## Repository layout
 
@@ -68,7 +140,8 @@ generator/
   gpx.py             # GPX parsing, blip filtering, stats
   photos.py          # EXIF extraction, thumbnail generation, photo-to-track matching
   render.py          # GeoJSON helpers and Jinja2 rendering → hike pages, meta.json sidecars, home page
-  cli.py             # CLI entry point (build / new / serve)
+  r2.py              # Cloudflare R2 upload helpers (boto3 S3-compatible)
+  cli.py             # CLI entry point (build / build-index / new / serve / r2-check)
 
 templates/
   base.html          # CDN links for Leaflet + Chart.js, block structure
@@ -84,6 +157,8 @@ tests/
   test_gpx.py
   test_photos.py
   test_render.py
+  test_r2.py
+  test_cli.py
 ```
 
 ### `hike.toml` schema
@@ -98,6 +173,8 @@ tz_offset   = "+07:00"      # local time offset for matching EXIF timestamps to 
 trim_start_m = 0            # metres to trim from route start (privacy)
 trim_end_m   = 0            # metres to trim from route end (privacy)
 ```
+
+---
 
 ## Data models
 
@@ -116,11 +193,15 @@ HikeMeta     slug, title, date, description, tags, cover, tz_offset,
 Hike         meta, routes, photos
 ```
 
+---
+
 ## Running tests
 
 ```bash
 uv run pytest tests/
 ```
+
+---
 
 ## Development setup
 

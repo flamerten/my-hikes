@@ -14,3 +14,7 @@ raw
 .claude
 
 claude_docs
+
+.env
+
+site/thumbs/

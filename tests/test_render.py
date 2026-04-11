@@ -452,3 +452,53 @@ def test_render_home_empty_list(tmp_path: Path, templates_dir: Path) -> None:
     render_home([], tmp_path, templates_dir)
     html = (tmp_path / "index.html").read_text()
     assert "MyHikes" in html
+
+
+# ---------------------------------------------------------------------------
+# photos_to_pins — thumb_url_base override
+# ---------------------------------------------------------------------------
+
+
+def test_photos_to_pins_uses_r2_thumb_url_base(matched_photo) -> None:
+    r2_base = "https://pub-hash.r2.dev/thumbs/test-hike"
+    pins = photos_to_pins([matched_photo], "test-hike", base_url="", thumb_url_base=r2_base)
+    assert pins[0]["thumb_url"] == f"{r2_base}/{matched_photo.filename}"
+
+
+def test_photos_to_pins_default_falls_back_to_local(matched_photo) -> None:
+    pins = photos_to_pins([matched_photo], "test-hike", base_url="/my-hikes")
+    assert pins[0]["thumb_url"].startswith("/my-hikes/thumbs/test-hike/")
+
+
+# ---------------------------------------------------------------------------
+# photos_to_gallery — thumb_url_base override
+# ---------------------------------------------------------------------------
+
+
+def test_photos_to_gallery_uses_r2_thumb_url_base(matched_photo) -> None:
+    r2_base = "https://pub-hash.r2.dev/thumbs/test-hike"
+    gallery = photos_to_gallery([matched_photo], "test-hike", base_url="", thumb_url_base=r2_base)
+    assert gallery[0]["thumb_url"] == f"{r2_base}/{matched_photo.filename}"
+
+
+def test_photos_to_gallery_default_falls_back_to_local(matched_photo) -> None:
+    gallery = photos_to_gallery([matched_photo], "test-hike", base_url="/my-hikes")
+    assert gallery[0]["thumb_url"].startswith("/my-hikes/thumbs/test-hike/")
+
+
+# ---------------------------------------------------------------------------
+# write_meta_json — thumb_url_base override
+# ---------------------------------------------------------------------------
+
+
+def test_write_meta_json_cover_uses_r2_thumb_url_base(sample_hike, tmp_path: Path) -> None:
+    r2_base = "https://pub-hash.r2.dev/thumbs/test-hike"
+    write_meta_json(sample_hike, tmp_path, base_url="", thumb_url_base=r2_base)
+    data = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    assert data["cover_thumb_url"].startswith("https://pub-hash.r2.dev/")
+
+
+def test_write_meta_json_cover_falls_back_to_local(sample_hike, tmp_path: Path) -> None:
+    write_meta_json(sample_hike, tmp_path, base_url="/my-hikes")
+    data = json.loads((tmp_path / "hikes" / sample_hike.meta.slug / "meta.json").read_text())
+    assert data["cover_thumb_url"].startswith("/my-hikes/thumbs/")
