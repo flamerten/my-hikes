@@ -10,6 +10,10 @@ import shutil
 import sys
 from pathlib import Path
 
+from alive_progress import alive_it
+
+from dotenv import load_dotenv
+
 from generator.config import load_hike_meta
 from generator.gpx import load_routes
 from generator.models import Hike
@@ -30,6 +34,7 @@ trim_end_m = 0
 
 
 def main() -> None:
+    load_dotenv()
     parser = argparse.ArgumentParser(prog="hikes")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -78,15 +83,20 @@ def _build(slug: str, base_url: str = "", use_r2: bool = True) -> None:
     meta = load_hike_meta(hike_dir)
     routes = load_routes(hike_dir / "routes")
     photos = load_photos(hike_dir / "media", tz_offset=meta.tz_offset)
+    
+    n_photos = len(photos)
     match_photos(photos, routes)
+    n_photos_matches = len(photos)
+    
+    print(f"Match Photos Done {n_photos_matches}/{n_photos}")
 
     thumbs_dir = out_dir / "thumbs" / slug
-    for p in photos:
+    for p in alive_it(photos, title = "Generating Thumbnails"):
         generate_thumbnail(p, thumbs_dir)
 
     thumb_url_base: str | None = None
     if use_r2:
-        for p in photos:
+        for p in alive_it(photos, title = "Uploading to R2"):
             if p.thumb_path:
                 upload_thumbnail(p.thumb_path, slug, p.filename)
         thumb_url_base = f"{os.environ['CF_R2_PUBLIC_URL'].rstrip('/')}/thumbs/{slug}"

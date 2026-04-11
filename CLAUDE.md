@@ -33,10 +33,9 @@ uv run pytest tests/                             # run all tests
 
 Typical workflow when adding a hike (with R2):
 ```bash
-source .env                                      # load CF_R2_* environment variables
-uv run hikes build --hike <slug>                 # uploads thumbnails to R2, writes meta.json
-uv run hikes build-index                         # rebuilds home page
-uv run hikes serve                               # preview at http://localhost:8000/
+uv run hikes build --hike <slug>   # reads .env automatically, uploads thumbnails to R2, writes meta.json
+uv run hikes build-index           # rebuilds home page
+uv run hikes serve                 # preview at http://localhost:8000/
 ```
 
 Typical workflow for local-only preview (no R2 upload, thumbnails in site/thumbs/):
@@ -48,8 +47,7 @@ uv run hikes serve
 
 Workflow when building for GitHub Pages deployment (repo is `my-hikes`):
 ```bash
-source .env
-uv run hikes build --hike <slug> --base-url /my-hikes   # uploads to R2, HTML uses R2 URLs
+uv run hikes build --hike <slug> --base-url /my-hikes   # reads .env, uploads to R2, HTML uses R2 URLs
 uv run hikes build-index --base-url /my-hikes
 git add site/   # site/thumbs/ is gitignored — only HTML + GPX + static assets are committed
 git commit -m "build: <slug>"

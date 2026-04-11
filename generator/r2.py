@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 import boto3
 from botocore.exceptions import ClientError
@@ -29,11 +30,18 @@ def object_key(slug: str, filename: str) -> str:
     return f"thumbs/{slug}/{filename}"
 
 
+def _full_key(slug: str, filename: str) -> str:
+    """object_key prefixed with any path component in CF_R2_PUBLIC_URL."""
+    prefix = urlparse(os.environ["CF_R2_PUBLIC_URL"]).path.strip("/")
+    key = object_key(slug, filename)
+    return f"{prefix}/{key}" if prefix else key
+
+
 def upload_thumbnail(local_path: Path, slug: str, filename: str) -> None:
     """Upload a thumbnail to R2, skipping if the object already exists."""
     client = get_r2_client()
     bucket = os.environ["CF_R2_BUCKET"]
-    key = object_key(slug, filename)
+    key = _full_key(slug, filename)
 
     try:
         client.head_object(Bucket=bucket, Key=key)

@@ -87,6 +87,25 @@ def test_upload_calls_upload_file_when_missing(tmp_path: Path) -> None:
     )
 
 
+def test_upload_prefixes_key_with_public_url_path(tmp_path: Path) -> None:
+    local = tmp_path / "thumb.jpg"
+    local.write_bytes(b"fake")
+    mock_client = MagicMock()
+    mock_client.head_object.side_effect = _make_client_error("404")
+
+    env = {**R2_ENV, "CF_R2_PUBLIC_URL": "https://pub-hash.r2.dev/myhikes"}
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch.dict(os.environ, env):
+        upload_thumbnail(local, "slug", "thumb.jpg")
+
+    mock_client.upload_file.assert_called_once_with(
+        str(local),
+        "my-bucket",
+        "myhikes/thumbs/slug/thumb.jpg",
+        ExtraArgs={"ContentType": "image/jpeg"},
+    )
+
+
 def test_upload_reraises_non_404_client_error(tmp_path: Path) -> None:
     local = tmp_path / "thumb.jpg"
     local.write_bytes(b"fake")

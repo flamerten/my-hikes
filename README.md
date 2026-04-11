@@ -35,7 +35,6 @@ CF_R2_PUBLIC_URL=https://pub-<hash>.r2.dev
 Verify the credentials work before running a real build:
 
 ```bash
-source .env   # or: set -a && . .env && set +a
 uv run hikes r2-check
 # ok: connected to bucket 'myhikes-thumbs' (0 object(s) sampled)
 ```
@@ -64,7 +63,6 @@ uv run hikes new 2026-05-01-trail-name
 ### Preview locally (thumbnails served from R2)
 
 ```bash
-source .env   # load R2 credentials
 uv run hikes build --hike 2026-05-01-trail-name
 uv run hikes build-index
 uv run hikes serve
@@ -92,22 +90,19 @@ uv run hikes serve
 The build must be run locally because `raw/` (original media) is gitignored and unavailable in CI. CI only uploads the pre-built `site/` directory.
 
 ```bash
-# 1. Load R2 credentials
-source .env
-
-# 2. Build each hike (uploads thumbnails to R2, writes R2 URLs into HTML)
+# 1. Build each hike (uploads thumbnails to R2, writes R2 URLs into HTML)
 uv run hikes build --hike <slug> --base-url /my-hikes
 
-# 3. Rebuild the home page
+# 2. Rebuild the home page
 uv run hikes build-index --base-url /my-hikes
 
-# 4. Commit site/ (site/thumbs/ is gitignored — only HTML + GPX + static assets)
+# 3. Commit site/ (site/thumbs/ is gitignored — only HTML + GPX + static assets)
 git add site/
 git commit -m "build: <slug>"
-git push
+git push   # CI uploads site/ to Pages; thumbnails already in R2
 ```
 
-GitHub Actions picks up the push, uploads `site/` to Pages, and the live site is updated. Thumbnails are already in R2 from step 2 and load directly in the browser from there.
+GitHub Actions picks up the push, uploads `site/` to Pages, and the live site is updated. Thumbnails are already in R2 from step 1 and load directly in the browser from there.
 
 ---
 
