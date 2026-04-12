@@ -14,44 +14,46 @@ The `claude_docs/` directory contains design documents for Claude's reference:
 | `IMRPVOVE_VISUAL.md` | Visualization enhancement plan (marker clustering, photo lightbox, per-route selection). **All three features are complete.** |
 | `HOME_PAGE_PLAN.md` | Home page implementation plan (hike cards, cover photo, meta.json sidecar, `build-index` command). **Complete.** |
 | `CLOUDFLARE_PORT.md` | R2 thumbnail storage migration plan (boto3 upload, `--no-r2` flag, `r2-check` command). **Complete.** |
+| `UNIFY_BUILD_PLAN.md` | Unified build plan: `site.toml` config, `build-all` command, prefix-stripping `serve`. **Complete.** |
 
 When working on this project, read the relevant `claude_docs/` file before modifying a module.
 
 ## Commands
 
 ```bash
-uv run hikes build --hike SLUG                   # build one hike → uploads thumbs to R2, writes R2 URLs into HTML
-uv run hikes build --hike SLUG --no-r2           # build without R2 — thumbnails stay in site/thumbs/, local URLs
-uv run hikes build --hike SLUG --base-url /REPO  # prefix all asset paths for GitHub Pages
-uv run hikes build-index                         # build site/index.html home page from all meta.json sidecars
-uv run hikes build-index --base-url /REPO        # same, with asset path prefix
-uv run hikes new SLUG                            # scaffold raw/<slug>/ with hike.toml template
-uv run hikes serve [--port N]                    # serve site/ over HTTP (default port 8000)
-uv run hikes r2-check                            # verify R2 credentials and bucket connectivity
-uv run pytest tests/                             # run all tests
+uv run hikes build-all                         # build all hikes + home page (reads site.toml for base_url)
+uv run hikes build --hike SLUG                 # build one hike (reads site.toml for base_url)
+uv run hikes build-index                       # rebuild home page only
+uv run hikes build-all --no-r2                 # build without R2 (local thumbs, works offline)
+uv run hikes build --hike SLUG --no-r2         # build one hike without R2
+uv run hikes build --hike SLUG --base-url URL  # override base_url from site.toml
+uv run hikes serve [--port N]                  # serve site/ — strips base_url prefix automatically
+uv run hikes new SLUG                          # scaffold raw/<slug>/ with hike.toml template
+uv run hikes r2-check                          # verify R2 credentials and bucket connectivity
+uv run pytest tests/                           # run all tests
 ```
 
-Typical workflow when adding a hike (with R2):
+`base_url` is stored once in `site.toml` (committed). No `--base-url` flag needed in normal use.
+
+Typical workflow when adding a hike:
 ```bash
-uv run hikes build --hike <slug>   # reads .env automatically, uploads thumbnails to R2, writes meta.json
+uv run hikes build --hike <slug>   # reads site.toml, uploads thumbnails to R2, writes meta.json
 uv run hikes build-index           # rebuilds home page
-uv run hikes serve                 # preview at http://localhost:8000/
+uv run hikes serve                 # preview at http://localhost:8000/my-hikes/
+git add site/ && git commit -m "build: <slug>" && git push
 ```
 
-Typical workflow for local-only preview (no R2 upload, thumbnails in site/thumbs/):
+Full rebuild and deploy:
 ```bash
-uv run hikes build --hike <slug> --no-r2
-uv run hikes build-index
+uv run hikes build-all
+uv run hikes serve                 # verify locally
+git add site/ && git commit -m "build: rebuild all" && git push
+```
+
+Offline preview (no R2 credentials needed, do not deploy this build):
+```bash
+uv run hikes build-all --no-r2
 uv run hikes serve
-```
-
-Workflow when building for GitHub Pages deployment (repo is `my-hikes`):
-```bash
-uv run hikes build --hike <slug> --base-url /my-hikes   # reads .env, uploads to R2, HTML uses R2 URLs
-uv run hikes build-index --base-url /my-hikes
-git add site/   # site/thumbs/ is gitignored — only HTML + GPX + static assets are committed
-git commit -m "build: <slug>"
-git push        # GitHub Actions uploads site/ to Pages; thumbnails already in R2
 ```
 
 Always use `uv run python` — never bare `python` or `python3`.
@@ -73,13 +75,13 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 
 | Module | Role | Status |
 |---|---|---|
-| `cli.py` | argparse entry point; `build`, `build-index`, `new`, `serve`, `r2-check` commands | Done |
-| `config.py` | Parses `hike.toml` → `HikeMeta` | Done |
+| `cli.py` | argparse entry point; `build`, `build-all`, `build-index`, `new`, `serve`, `r2-check` commands | Done |
+| `config.py` | Parses `hike.toml` → `HikeMeta`; reads `site.toml` → `base_url` | Done |
 | `gpx.py` | Parses GPX → `Route`/`TrackPoint`; filters GPS blips; computes `RouteStats` | Done |
 | `photos.py` | Reads EXIF, extracts video poster frames (ffmpeg), matches media to track positions, generates thumbnails | Done |
 | `render.py` | GeoJSON helpers + Jinja2 rendering → hike pages, meta.json sidecars, home page | Done |
 | `r2.py` | Cloudflare R2 upload helpers: `upload_thumbnail`, `thumb_url`, `r2_configured`, `get_r2_client` | Done |
-| `index.py` | Builds `site/index.json` for client-side Fuse.js search | **Phase 3** |
+| `index.py` | Builds `site/index.json` for client-side Fuse.js search | **Pending** |
 
 ### Core data models
 

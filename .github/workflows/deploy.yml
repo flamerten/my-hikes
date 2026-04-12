@@ -1,3 +1,6 @@
+# site/ is built locally with `hikes build-all` (reads base_url from site.toml).
+# This workflow only uploads the pre-built site/ directory to GitHub Pages.
+# Thumbnails are already in Cloudflare R2 from the local build step.
 name: Deploy to GitHub Pages
 
 on:

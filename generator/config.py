@@ -1,10 +1,22 @@
-"""Parse hike.toml into a HikeMeta object."""
+"""Parse hike.toml into a HikeMeta object, and site.toml into project config."""
 from __future__ import annotations
 
 import tomllib
 from pathlib import Path
 
 from generator.models import HikeMeta
+
+
+def load_site_config(project_root: Path = Path(".")) -> dict:
+    config_path = project_root / "site.toml"
+    if not config_path.exists():
+        return {}
+    with config_path.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def get_base_url(project_root: Path = Path(".")) -> str:
+    return load_site_config(project_root).get("base_url", "")
 
 
 def load_hike_meta(hike_dir: Path) -> HikeMeta:
