@@ -80,7 +80,7 @@ This is a static site generator that turns GPX tracks + photos into map-based hi
 | `gpx.py` | Parses GPX → `Route`/`TrackPoint`; filters GPS blips; computes `RouteStats` | Done |
 | `photos.py` | Reads EXIF, extracts video poster frames (ffmpeg), matches media to track positions, generates thumbnails | Done |
 | `render.py` | GeoJSON helpers + Jinja2 rendering → hike pages, meta.json sidecars, home page | Done |
-| `r2.py` | Cloudflare R2 upload helpers: `upload_thumbnail`, `thumb_url`, `r2_configured`, `get_r2_client` | Done |
+| `r2.py` | Cloudflare R2 helpers: `upload_thumbnail`, `thumb_url`, `r2_configured`, `get_r2_client`, `list_objects`, `delete_folder`; direct CLI via `python -m generator.r2` | Done |
 | `index.py` | Builds `site/index.json` for client-side Fuse.js search | **Pending** |
 
 ### Core data models

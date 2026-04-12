@@ -26,7 +26,7 @@ Create a `.env` file in the project root (already gitignored) with these values:
 
 ```bash
 CF_R2_BUCKET=myhikes
-CF_R2_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com/<bucket>
+CF_R2_ENDPOINT_URL=https://<account_id>.r2.cloudflarestorage.com
 CF_R2_ACCESS_KEY_ID=<access_key>
 CF_R2_SECRET_ACCESS_KEY=<secret_key>
 CF_R2_PUBLIC_URL=https://pub-<hash>.r2.dev/<bucket>
@@ -138,6 +138,14 @@ uv run hikes build --hike <slug> --base-url /override   # override base_url from
 uv run hikes new <slug>                     # scaffold raw/<slug>/ with hike.toml template
 uv run hikes r2-check                       # verify R2 credentials and bucket connectivity
 uv run pytest tests/                        # run all tests
+```
+
+### R2 bucket management (direct CLI)
+
+```bash
+uv run generator/r2.py list                          # list all objects in the bucket
+uv run generator/r2.py list --prefix myhikes/thumbs/ # filter by key prefix
+uv run generator/r2.py delete <prefix>               # delete all objects matching a key prefix (prompts per page)
 ```
 
 ---

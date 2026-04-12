@@ -18,9 +18,13 @@ _REQUIRED_ENV_VARS = (
 
 
 def get_r2_client():
+    # R2 endpoint must be just scheme+host — strip any path component (bucket name)
+    # that may have been appended to CF_R2_ENDPOINT_URL by mistake.
+    parsed = urlparse(os.environ["CF_R2_ENDPOINT_URL"])
+    endpoint = f"{parsed.scheme}://{parsed.netloc}"
     return boto3.client(
         "s3",
-        endpoint_url=os.environ["CF_R2_ENDPOINT_URL"],
+        endpoint_url=endpoint,
         aws_access_key_id=os.environ["CF_R2_ACCESS_KEY_ID"],
         aws_secret_access_key=os.environ["CF_R2_SECRET_ACCESS_KEY"],
     )
@@ -66,18 +70,29 @@ def thumb_url(slug: str, filename: str) -> str:
 def r2_configured() -> bool:
     return all(os.environ.get(v) for v in _REQUIRED_ENV_VARS)
 
-def delete_folder(slug: str) -> None:
-    """Deletes all objects within the 'thumbs/{slug}/' prefix."""
+def list_objects(prefix: str = "") -> None:
+    """List all objects in the bucket, optionally filtered by prefix."""
     client = get_r2_client()
     bucket_name = os.environ["CF_R2_BUCKET"]
-    
-    # We define the prefix based on your existing object_key structure
-    # This targets "thumbs/your-slug/"
-    folder_prefix = f"thumbs/{slug}/"
-    
-    # Using a paginator to handle buckets with more than 1000 objects
+    print(f"Listing bucket: {bucket_name!r}, prefix: {prefix!r}")
     paginator = client.get_paginator("list_objects_v2")
-    pages = paginator.paginate(Bucket=bucket_name, Prefix=folder_prefix)
+    paginate_kwargs: dict = {"Bucket": bucket_name}
+    if prefix:
+        paginate_kwargs["Prefix"] = prefix
+    count = 0
+    for page in paginator.paginate(**paginate_kwargs):
+        for obj in page.get("Contents", []):
+            print(obj["Key"])
+            count += 1
+    print(f"\n{count} object(s) found.")
+
+
+def delete_folder(prefix: str) -> None:
+    """Delete all objects whose key starts with prefix."""
+    client = get_r2_client()
+    bucket_name = os.environ["CF_R2_BUCKET"]
+    paginator = client.get_paginator("list_objects_v2")
+    pages = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
 
     objects_found = False
     for page in pages:
@@ -86,17 +101,22 @@ def delete_folder(slug: str) -> None:
         
         objects_found = True
         delete_list = [{"Key": obj["Key"]} for obj in page["Contents"]]
-        
-        print(f"Deleting {len(delete_list)} objects from {folder_prefix}...")
+
+        print(f"Deleting {len(delete_list)} objects under {prefix!r}...")
+        confirmation = input("Are you sure? (y/N): ")
+        if confirmation.lower() != "y":
+            print("Operation cancelled.")
+            sys.exit(0)
+
         client.delete_objects(
             Bucket=bucket_name,
             Delete={"Objects": delete_list}
         )
 
     if not objects_found:
-        print(f"No objects found with prefix: {folder_prefix}")
+        print(f"No objects found with prefix: {prefix!r}")
     else:
-        print(f"Successfully deleted folder: {folder_prefix}")
+        print(f"Done.")
 
 
 if __name__ == "__main__":
@@ -109,14 +129,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Cloudflare R2 Management CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
+    # List command
+    list_parser = subparsers.add_parser("list", help="List all objects in the bucket")
+    list_parser.add_argument("--prefix", type=str, default="", help="Optional prefix to filter by")
+
     # Delete command
-    delete_parser = subparsers.add_parser("delete", help="Delete a thumb folder by slug")
-    delete_parser.add_argument("slug", type=str, help="The slug identifier of the folder to delete")
-    delete_parser.add_argument(
-        "--confirm", 
-        action="store_true", 
-        help="Confirm deletion without additional prompt"
-    )
+    delete_parser = subparsers.add_parser("delete", help="Delete all objects matching a key prefix")
+    delete_parser.add_argument("prefix", type=str, help="Key prefix to delete (e.g. 'myhikes/thumbs/my-hike/')")
 
     args = parser.parse_args()
 
@@ -124,13 +143,9 @@ if __name__ == "__main__":
         print("Error: Missing R2 environment variables.")
         sys.exit(1)
 
-    if args.command == "delete":
-        if not args.confirm:
-            confirmation = input(f"Are you sure you want to delete all thumbs for '{args.slug}'? (y/N): ")
-            if confirmation.lower() != "y":
-                print("Operation cancelled.")
-                sys.exit(0)
-        
-        delete_folder(args.slug)
+    if args.command == "list":
+        list_objects(args.prefix)
+    elif args.command == "delete":
+        delete_folder(args.prefix)
     else:
         parser.print_help()
