@@ -2,13 +2,38 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from botocore.exceptions import ClientError
 
-from generator.r2 import object_key, r2_configured, thumb_url, upload_thumbnail
+from generator.models import Photo
+from generator.r2 import (
+    _full_key,
+    _slug_r2_prefix,
+    list_objects,
+    object_key,
+    r2_configured,
+    sync_r2_thumbnails,
+    thumb_url,
+    upload_thumbnail,
+)
+
+
+def _make_photo(filename: str, has_thumb: bool = True) -> Photo:
+    p = Photo(
+        path=Path(f"/raw/test-hike/media/{filename}"),
+        filename=filename,
+        timestamp_local=datetime(2026, 4, 1, 12, 0, 0),
+        timestamp_utc=datetime(2026, 4, 1, 5, 0, 0, tzinfo=timezone.utc),
+        lat=None,
+        lon=None,
+    )
+    if has_thumb:
+        p.thumb_path = Path(f"/site/thumbs/test-hike/{filename}")
+    return p
 
 
 R2_ENV = {
@@ -152,3 +177,157 @@ def test_r2_configured_false_when_var_empty() -> None:
     env = {**R2_ENV, "CF_R2_BUCKET": ""}
     with patch.dict(os.environ, env):
         assert r2_configured() is False
+
+
+# ---------------------------------------------------------------------------
+# list_objects — refactored to return list[str]
+# ---------------------------------------------------------------------------
+
+
+def test_list_objects_returns_keys() -> None:
+    page = {"Contents": [{"Key": "thumbs/slug/a.jpg"}, {"Key": "thumbs/slug/b.jpg"}]}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = iter([page])
+    mock_client = MagicMock()
+    mock_client.get_paginator.return_value = mock_paginator
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch.dict(os.environ, R2_ENV):
+        result = list_objects("thumbs/slug/")
+    assert sorted(result) == ["thumbs/slug/a.jpg", "thumbs/slug/b.jpg"]
+
+
+def test_list_objects_passes_prefix_to_paginator() -> None:
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = iter([{}])
+    mock_client = MagicMock()
+    mock_client.get_paginator.return_value = mock_paginator
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch.dict(os.environ, R2_ENV):
+        list_objects("myhikes/thumbs/jungle-trek/")
+    mock_paginator.paginate.assert_called_once_with(
+        Bucket="my-bucket", Prefix="myhikes/thumbs/jungle-trek/",
+    )
+
+
+# ---------------------------------------------------------------------------
+# _slug_r2_prefix
+# ---------------------------------------------------------------------------
+
+
+def test_slug_r2_prefix_no_url_prefix() -> None:
+    env = {**R2_ENV, "CF_R2_PUBLIC_URL": "https://pub-hash.r2.dev"}
+    with patch.dict(os.environ, env):
+        assert _slug_r2_prefix("jungle-trek") == "thumbs/jungle-trek/"
+
+
+def test_slug_r2_prefix_with_url_prefix() -> None:
+    env = {**R2_ENV, "CF_R2_PUBLIC_URL": "https://pub-hash.r2.dev/myhikes"}
+    with patch.dict(os.environ, env):
+        assert _slug_r2_prefix("jungle-trek") == "myhikes/thumbs/jungle-trek/"
+
+
+# ---------------------------------------------------------------------------
+# sync_r2_thumbnails
+# ---------------------------------------------------------------------------
+
+
+def test_sync_deletes_orphaned_keys() -> None:
+    photos = [_make_photo("IMG_001.jpg"), _make_photo("IMG_002.jpg")]
+    existing_keys = [
+        "thumbs/test-hike/IMG_001.jpg",
+        "thumbs/test-hike/IMG_002.jpg",
+        "thumbs/test-hike/IMG_DELETED.jpg",  # orphan
+    ]
+    mock_client = MagicMock()
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch("generator.r2.list_objects", return_value=existing_keys), \
+         patch.dict(os.environ, R2_ENV):
+        sync_r2_thumbnails("test-hike", photos)
+    mock_client.delete_objects.assert_called_once_with(
+        Bucket="my-bucket",
+        Delete={"Objects": [{"Key": "thumbs/test-hike/IMG_DELETED.jpg"}]},
+    )
+
+
+def test_sync_returns_count() -> None:
+    photos = [_make_photo("IMG_001.jpg")]
+    existing_keys = [
+        "thumbs/test-hike/IMG_001.jpg",
+        "thumbs/test-hike/STALE_A.jpg",
+        "thumbs/test-hike/STALE_B.jpg",
+    ]
+    mock_client = MagicMock()
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch("generator.r2.list_objects", return_value=existing_keys), \
+         patch.dict(os.environ, R2_ENV):
+        n = sync_r2_thumbnails("test-hike", photos)
+    assert n == 2
+
+
+def test_sync_skips_delete_when_no_orphans() -> None:
+    photos = [_make_photo("IMG_001.jpg")]
+    mock_client = MagicMock()
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch("generator.r2.list_objects", return_value=["thumbs/test-hike/IMG_001.jpg"]), \
+         patch.dict(os.environ, R2_ENV):
+        n = sync_r2_thumbnails("test-hike", photos)
+    mock_client.delete_objects.assert_not_called()
+    assert n == 0
+
+
+def test_sync_no_existing_objects() -> None:
+    photos = [_make_photo("IMG_001.jpg")]
+    mock_client = MagicMock()
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch("generator.r2.list_objects", return_value=[]), \
+         patch.dict(os.environ, R2_ENV):
+        n = sync_r2_thumbnails("test-hike", photos)
+    mock_client.delete_objects.assert_not_called()
+    assert n == 0
+
+
+def test_sync_batches_large_deletes() -> None:
+    """sync_r2_thumbnails splits deletions into batches of 1000 (S3 limit)."""
+    photos = [_make_photo("keep.jpg")]
+    # 1050 orphaned keys — should produce 2 delete_objects calls (1000 + 50)
+    existing_keys = ["thumbs/test-hike/keep.jpg"] + [
+        f"thumbs/test-hike/stale_{i:04d}.jpg" for i in range(1050)
+    ]
+    mock_client = MagicMock()
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch("generator.r2.list_objects", return_value=existing_keys), \
+         patch.dict(os.environ, R2_ENV):
+        n = sync_r2_thumbnails("test-hike", photos)
+    assert n == 1050
+    assert mock_client.delete_objects.call_count == 2
+    first_batch = mock_client.delete_objects.call_args_list[0][1]["Delete"]["Objects"]
+    second_batch = mock_client.delete_objects.call_args_list[1][1]["Delete"]["Objects"]
+    assert len(first_batch) == 1000
+    assert len(second_batch) == 50
+
+
+def test_sync_ignores_photos_without_thumbs() -> None:
+    """Photos with thumb_path=None are excluded from expected set, so their R2 key is deleted."""
+    photos = [
+        _make_photo("IMG_001.jpg", has_thumb=True),
+        _make_photo("IMG_002.jpg", has_thumb=False),  # thumbnail generation failed
+    ]
+    existing_keys = [
+        "thumbs/test-hike/IMG_001.jpg",
+        "thumbs/test-hike/IMG_002.jpg",  # orphan — not in expected set
+        "thumbs/test-hike/IMG_003.jpg",  # orphan — photo no longer exists
+    ]
+    mock_client = MagicMock()
+    with patch("generator.r2.get_r2_client", return_value=mock_client), \
+         patch("generator.r2.list_objects", return_value=existing_keys), \
+         patch.dict(os.environ, R2_ENV):
+        n = sync_r2_thumbnails("test-hike", photos)
+    assert n == 2
+    deleted_keys = {
+        obj["Key"]
+        for obj in mock_client.delete_objects.call_args[1]["Delete"]["Objects"]
+    }
+    assert deleted_keys == {
+        "thumbs/test-hike/IMG_002.jpg",
+        "thumbs/test-hike/IMG_003.jpg",
+    }

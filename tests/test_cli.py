@@ -53,6 +53,7 @@ def test_build_with_r2_does_not_call_upload_when_no_photos(tmp_path: Path, monke
     _scaffold_hike(tmp_path, "test-hike")
 
     with patch("generator.cli.upload_thumbnail") as mock_upload, \
+         patch("generator.cli.sync_r2_thumbnails", return_value=0), \
          patch.dict(os.environ, R2_ENV):
         _build("test-hike", base_url="/my-hikes", use_r2=True)
 
@@ -74,6 +75,7 @@ def test_build_with_r2_embeds_r2_url_in_html(tmp_path: Path, monkeypatch) -> Non
     _scaffold_hike(tmp_path, "test-hike")
 
     with patch("generator.cli.upload_thumbnail", return_value=None), \
+         patch("generator.cli.sync_r2_thumbnails", return_value=0), \
          patch.dict(os.environ, R2_ENV):
         _build("test-hike", base_url="/my-hikes", use_r2=True)
 
@@ -89,6 +91,22 @@ def test_build_without_r2_uses_local_thumb_url_in_meta(tmp_path: Path, monkeypat
 
     meta = json.loads((tmp_path / "site" / "hikes" / "test-hike" / "meta.json").read_text())
     assert "r2.dev" not in (meta.get("cover_thumb_url") or "")
+
+
+def test_build_prunes_orphaned_r2_thumbnails(tmp_path: Path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+    _scaffold_hike(tmp_path, "test-hike")
+
+    with patch("generator.cli.upload_thumbnail", return_value=None), \
+         patch("generator.cli.sync_r2_thumbnails", return_value=3) as mock_sync, \
+         patch.dict(os.environ, R2_ENV):
+        _build("test-hike", base_url="/my-hikes", use_r2=True)
+
+    mock_sync.assert_called_once()
+    slug_arg, photos_arg = mock_sync.call_args[0]
+    assert slug_arg == "test-hike"
+    assert isinstance(photos_arg, list)
+    assert "pruned 3 orphaned R2 object(s)" in capsys.readouterr().out
 
 
 def test_build_with_r2_missing_env_raises(tmp_path: Path, monkeypatch) -> None:

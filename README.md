@@ -116,8 +116,8 @@ GitHub Actions picks up the push, uploads `site/` to Pages, and the live site is
 ### Common workflows
 
 ```bash
-uv run hikes build-all                      # build all hikes + home page, upload thumbs to R2
-uv run hikes build --hike <slug>            # build one hike, upload its thumbs to R2
+uv run hikes build-all                      # build all hikes + home page, upload thumbs to R2, prune orphans
+uv run hikes build --hike <slug>            # build one hike, upload its thumbs to R2, prune orphans
 uv run hikes build-index                    # rebuild home page from existing meta.json sidecars
 uv run hikes serve                          # preview site/ at http://localhost:8000/my-hikes/
 ```
@@ -142,10 +142,12 @@ uv run pytest tests/                        # run all tests
 
 ### R2 bucket management (direct CLI)
 
+Orphaned thumbnails are pruned automatically on every R2 build. The commands below are for manual inspection or bulk deletion.
+
 ```bash
-uv run generator/r2.py list                          # list all objects in the bucket
-uv run generator/r2.py list --prefix myhikes/thumbs/ # filter by key prefix
-uv run generator/r2.py delete <prefix>               # delete all objects matching a key prefix (prompts per page)
+uv run python -m generator.r2 list                          # list all objects in the bucket
+uv run python -m generator.r2 list --prefix myhikes/thumbs/ # filter by key prefix
+uv run python -m generator.r2 delete <prefix>               # delete all objects matching a key prefix (prompts for confirmation)
 ```
 
 ---
@@ -166,7 +168,7 @@ generator/
   gpx.py           # GPX parsing, blip filtering, stats
   photos.py        # EXIF extraction, thumbnail generation, photo-to-track matching
   render.py        # GeoJSON helpers and Jinja2 rendering → hike pages, meta.json sidecars, home page
-  r2.py            # Cloudflare R2 upload helpers (boto3 S3-compatible)
+  r2.py            # Cloudflare R2 helpers: upload, sync (orphan pruning), list, delete
   cli.py           # CLI entry point (build / build-all / build-index / new / serve / r2-check)
 
 templates/

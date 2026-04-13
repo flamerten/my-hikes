@@ -18,7 +18,7 @@ from generator.config import get_base_url, load_hike_meta
 from generator.gpx import load_routes
 from generator.models import Hike
 from generator.photos import generate_thumbnail, load_photos, match_photos
-from generator.r2 import r2_configured, upload_thumbnail
+from generator.r2 import r2_configured, sync_r2_thumbnails, upload_thumbnail
 from generator.render import render_hike, render_home, write_meta_json
 
 _TOML_TEMPLATE = """\
@@ -127,6 +127,9 @@ def _build(slug: str, base_url: str | None = None, use_r2: bool = True) -> None:
         for p in alive_it(photos, title="Uploading to R2"):
             if p.thumb_path:
                 upload_thumbnail(p.thumb_path, slug, p.filename)
+        n_pruned = sync_r2_thumbnails(slug, photos)
+        if n_pruned:
+            print(f"  pruned {n_pruned} orphaned R2 object(s)")
         thumb_url_base = f"{os.environ['CF_R2_PUBLIC_URL'].rstrip('/')}/thumbs/{slug}"
 
     gpx_out = out_dir / "hikes" / slug
